@@ -152,7 +152,7 @@ _PRIME_STRS = {
 }
 
 PRIMES = dict(
-    (k, int(re.sub('\s+', '', v), 16)) for k, v in _PRIME_STRS.iteritems())
+    (k, int(re.sub('\s+', '', v), 16)) for k, v in _PRIME_STRS.items())
 
 
 class DiffieHellman(object):
