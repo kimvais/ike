@@ -5,7 +5,8 @@ The goal of this project is to be a minimalistic IKEv2 (RFC 5996) implementation
 
 ## Design principles
 - Minimal amount of code.
-- Support *MUST* features of RFC 5996.
+- Support *MUST* features of draft-kivinen-ipsecme-ikev2-rfc5996 (RFC 5996
+  successor)
 - Use strongest algorithms possible.
 
 ### What this project is *NOT* going to be
@@ -15,3 +16,6 @@ The goal of this project is to be a minimalistic IKEv2 (RFC 5996) implementation
 ## License
 * MIT License
 
+## References
+* http://tools.ietf.org/html/draft-kivinen-ipsecme-ikev2-rfc5996bis-00
+* http://tools.ietf.org/html/draft-kivinen-ipsecme-ikev2-minimal-01
