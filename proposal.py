@@ -4,6 +4,7 @@
 #
 import os
 import operator
+import struct
 import const
 
 __author__ = 'kimvais'
@@ -12,7 +13,7 @@ __author__ = 'kimvais'
 class Proposal(object):
     PROTOCOL_IDS = dict(IKE=1, ESP=3)
 
-    def __init__(self, num=1, protocol='IKE', spi_len=0, last=False, transforms=None):
+    def __init__(self, num=1, protocol='IKE', spi=None, spi_len=0, last=False, transforms=None):
         if transforms == None:
             self.transforms = list()
         else:
@@ -21,21 +22,27 @@ class Proposal(object):
         self.last = last
         self.num = num
         self.protocol_id = Proposal.PROTOCOL_IDS[protocol]
-        if not spi_len:
-            if protocol == "IKE":
-                spi_len = 8
-            elif protocol in ('ESP', 'AH'):
-                spi_len = 4
-        if spi_len:
-            self.spi = bytearray(os.urandom(spi_len))
+        if spi is not None:
+            spi_str = spi
+            self.spi_len = len(spi)
         else:
-            self.spi = bytearray()
+            self.spi_len = spi_len
+        if not self.spi_len:
+            if protocol == "IKE":
+                self.spi_len = 8
+            elif protocol in ('ESP', 'AH'):
+                self.spi_len = 4
+            spi_str = os.urandom(self.spi_len)
+        if self.spi_len == 8:
+            self.spi, = struct.unpack('!Q', spi_str)
+        elif self.spi_len == 4:
+            self.spi, = struct.unpack('!L', spi_str)
 
     @property
     def data(self):
         self.transforms[-1].last = True
         parts = [x.data for x in self.transforms]
-        self.len = 4 + len(self.spi) + sum(len(x) for x in parts)
+        self.len = const.PROPOSAL_STRUCT.size + self.spi_len + sum(len(x) for x in parts)
         last = 0 if self.last else 2
         parts.insert(0, bytearray(const.PROPOSAL_STRUCT.pack(
             last,
@@ -43,10 +50,14 @@ class Proposal(object):
             self.len,
             self.num,
             self.protocol_id,
-            len(self.spi),
+            self.spi_len,
             len(self.transforms),
         )))
-        parts.insert(1, self.spi)
+        if self.spi_len == 8:
+            spi = struct.pack('!Q', self.spi)
+        else:
+            spi = struct.pack('!L', self.spi)
+        parts.insert(1, spi)
         return reduce(operator.add, parts)
 
 
@@ -59,7 +70,7 @@ class Transform(object):
         self.keysize = keysize
         if self.transform_type == 1 and self.keysize is not None:
             self.attributes.append(const.TRANFORM_ATTRIBUTES.pack(
-                (0b10000000 | 14), self.keysize))
+                (0b1000000000000000 | 14), self.keysize))
         self.len = (
             const.TRANSFORM_STRUCT.size +
             const.TRANFORM_ATTRIBUTES.size * len(self.attributes))

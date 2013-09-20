@@ -14,7 +14,7 @@ __author__ = 'kimvais'
 IKE_VERSION = (2 << 4 | 0)  # Major << 4 | Minor
 
 # iSPI, rSPI, NextPayload, (MjVer, MnVer), ExchangeType, Flags, MessageID, Len
-IKE_HEADER = struct.Struct('!2Q4B2Q')
+IKE_HEADER = struct.Struct('!2Q4B2L')
 
 IKE_SA_INIT = 34
 IKE_AUTH = 35
