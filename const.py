@@ -7,6 +7,7 @@
 # http://tools.ietf.org/html/rfc5996
 
 import struct
+from util import dh
 
 __author__ = 'kimvais'
 
@@ -52,30 +53,31 @@ PROPOSAL_STRUCT = struct.Struct('!2BH4B')
 TRANSFORM_STRUCT = struct.Struct('!2BH2BH')
 # Last(0) or 3, Reserved, Transform Length, Transform type, Reserver, Transform ID
 
-TRANSFORM_TYPES = dict(
-    ENCR=1, # Encryption (IKE and ESP)
-    PRF=2, # Pseudo-random function (IKE)
-    INTEG=3, # Integrity (IKE, Optional for ESP (AH - not supported))
-    DH=4, # Diffie-Hellman group
-    ESN=5, # Extended sequence numbers.
-)
+#    ENCR=1,  # Encryption (IKE and ESP)
+#    PRF=2,   # Pseudo-random function (IKE)
+#    INTEG=3, # Integrity (IKE, Optional for ESP (AH - not supported))
+#    DH=4,    # Diffie-Hellman group
+#    ESN=5,   # Extended sequence numbers.
 
-TRANSFORM_IDS = dict(
-    AUTH_AES_XCBC_96=5, # RFC 4307
-    AUTH_HMAC_SHA1_96=2, # RFC 4307
-    AUTH_HMAC_SHA2_256_128=12, # RFC 4868
-    AUTH_HMAC_SHA2_384_192=13, # RFC 4868
-    AUTH_HMAC_SHA2_512_256=14, # RFC 4868
-    ENCR_AES_CBC=12, # RFC 4307
-    ENCR_AES_CTR=13, # RFC 4307
-    ENCR_CAMELLIA_CBC=23, # RFC 5529
-    ENCR_CAMELLIA_CTR=24, # RFC 5529
-    PRF_AES128_CBC=4, # RFC 4307
-    PRF_HMAC_SHA1=2, # RFC 4307
-    PRF_HMAC_SHA2_256=5, # RFC 4868
-    PRF_HMAC_SHA2_384=6, # RFC 4868
-    PRF_HMAC_SHA2_512=7, # RFC 4868
+TRANSFORMS = dict(
+    AUTH_AES_XCBC_96=(3, 5), # RFC 4307
+    AUTH_HMAC_SHA1_96=(3, 2), # RFC 4307
+    AUTH_HMAC_SHA2_256_128=(3, 12), # RFC 4868
+    AUTH_HMAC_SHA2_384_192=(3, 13), # RFC 4868
+    AUTH_HMAC_SHA2_512_256=(3, 14), # RFC 4868
+    ENCR_AES_CBC=(1, 12), # RFC 4307
+    ENCR_AES_CTR=(1, 13), # RFC 4307
+    ENCR_CAMELLIA_CBC=(1, 23), # RFC 5529
+    ENCR_CAMELLIA_CTR=(1, 24), # RFC 5529
+    PRF_AES128_CBC=(2, 4), # RFC 4307
+    PRF_HMAC_SHA1=(2, 2), # RFC 4307
+    PRF_HMAC_SHA2_256=(2, 5), # RFC 4868
+    PRF_HMAC_SHA2_384=(2, 6), # RFC 4868
+    PRF_HMAC_SHA2_512=(2, 7), # RFC 4868
+    ESN=(5, 1)   # RFC 5996
 )
+for group_id in dh.PRIMES.keys():
+     TRANSFORMS['DH_GROUP_{0:d}'.format(group_id)] = (4, group_id)
 
 TRANFORM_ATTRIBUTES = struct.Struct('!2H')  # (0b10000000 | 14), Key Length
 

@@ -2,8 +2,10 @@
 #
 # Copyright © 2013 Kimmo Parviainen-Jalanko.
 #
+import operator
 
 import const
+from proposal import Proposal
 
 __author__ = 'kimvais'
 
@@ -34,26 +36,34 @@ class IkePayload(object):
         return self.header + self._data
 
 
-class _Proposal(object):
-    pass
-
-
 class SA(IkePayload):
     _type = 33
 
-    def __init__(self, next_payload=None, critical=False):
-        super(SA, self).__init__(next_payload, critical)
-        self.proposals = list()
+    def __init__(self, data=None, proposals=None, next_payload=None,
+                 critical=False):
+        super(SA, self).__init__(data, next_payload, critical)
+        if proposals == None:
+            self.proposals = [
+                Proposal(1, 'IKE', transforms=[
+                    ('ENCR_AES_CBC', 256),
+                    ('PRF_HMAC_SHA2_256',),
+                    ('AUTH_HMAC_SHA2_256_128',),
+                    ('DH_GROUP_14',)
+                ]),
+                Proposal(2, 'ESP', transforms=[
+                    ('ENCR_AES_CBC', 256),
+                    ('AUTH_HMAC_SHA2_256_128',)
+                ])
+            ]
+        else:
+            self.proposals = proposals
 
     @property
     def data(self):
         ret = list()
         self.proposals[-1].last = True
-        ret.append(proposal.data for proposal in self.proposals)
+        ret.extend(proposal.data for proposal in self.proposals)
         self.length = 4 + sum((len(x) for x in ret))
         ret.insert(0, self.header)
-        return ''.join(ret)
-
-    def add_proposal(self, proposal):
-        self.proposals.append(proposal)
+        return reduce(operator.add, ret)
 
