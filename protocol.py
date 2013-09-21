@@ -8,6 +8,7 @@ from util.dh import DiffieHellman
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class IKE(object):
@@ -35,3 +36,31 @@ class IKE(object):
             (len(data) + const.IKE_HEADER.size)
         ))
         return header + data
+
+    def parse(self, data):
+        data = bytearray(data)
+        header = data[0:const.IKE_HEADER.size]
+        (iSPI, rSPI, next_payload, version, exchange_type, flags,
+         message_id, length) = const.IKE_HEADER.unpack(header)
+        if self.iSPI != iSPI:
+            raise RuntimeError("Packet to another negotiation, initiator SPI "
+                               "mismatch")
+        if not self.rSPI:
+            self.rSPI = rSPI
+        elif not self.rSPI != rSPI:
+            raise RuntimeError("Packet to another negotiation, responder SPI "
+                               "mismatch")
+        remainder = data[const.IKE_HEADER.size:]
+        _payloads = list()
+        while next_payload:
+            logger.debug('Next payload: {0}'.format(next_payload))
+            logger.debug('{0} bytes remaining'.format(len(remainder)))
+            payload = payloads.BY_TYPE[next_payload](data=remainder)
+            _payloads.append(payload)
+            logger.critical(payload)
+            next_payload = payload.next_payload
+            remainder = remainder[payload.length:]
+        logger.debug("outta loop")
+
+
+

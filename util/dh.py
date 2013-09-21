@@ -160,6 +160,7 @@ class DiffieHellman(object):
 
     def __init__(self, group=2, bits=512):
         self.group = group
+        self.bits = bits
         self.generate_private_key(bits)
         self.generate_public_key()
 

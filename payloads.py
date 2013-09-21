@@ -2,14 +2,19 @@
 #
 # Copyright © 2013 Kimmo Parviainen-Jalanko.
 #
+import logging
 import operator
 import os
 import struct
+import binascii
 
 import const
 from proposal import Proposal
 
 __author__ = 'kimvais'
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class IkePayload(object):
@@ -17,15 +22,17 @@ class IkePayload(object):
 
     def __init__(self, data=None, next_payload=None, critical=False):
         if data is not None:
-            pass
-            # Parse
-        self.next_payload = const.PAYLOAD_TYPES[next_payload]
-        self.length = 0
-        self._data = bytearray()
-        if critical:
-            self.flags = 0b10000000
+            self.next_payload, self.flags, self.length = const.PAYLOAD_HEADER.unpack(
+                data[:const.PAYLOAD_HEADER.size])
+            self.parse(data[const.PAYLOAD_HEADER.size:])
         else:
-            self.flags = 0
+            self.next_payload = const.PAYLOAD_TYPES[next_payload]
+            self.length = 0
+            self._data = bytearray()
+            if critical:
+                self.flags = 0b10000000
+            else:
+                self.flags = 0
 
     @property
     def header(self):
@@ -36,6 +43,10 @@ class IkePayload(object):
     @property
     def data(self):
         return self.header + self._data
+
+    def __str__(self):
+        return "<IKE Payload {0} [{1}]>".format(self.__class__.__name__,
+                                                self.length)
 
 
 class SA(IkePayload):
@@ -70,21 +81,63 @@ class SA(IkePayload):
         ret.insert(0, self.header)
         return reduce(operator.add, ret)
 
+    def parse(self, data):
+        logger.critical(binascii.hexlify(data))
+
 
 class KE(IkePayload):
+    _type = 34
+
+    def parse(self, data):
+        self.group, _ = struct.unpack('!2H', data[:4])
+        self.kex_data = data[4:self.length]
+
     def __init__(self, data=None, next_payload=None, critical=False,
                  group=14, diffie_hellman=None):
         super(KE, self).__init__(data, next_payload, critical)
-        kex_data = '{0:x}'.format(diffie_hellman.public_key).decode('hex')
-        self._data = struct.pack('!2H', group, 0) + kex_data
-        self.length = const.PAYLOAD_HEADER.size + len(self._data)
+        if data is not None:
+            self.parse(data)
+        else:
+            self.kex_data = '{0:x}'.format(diffie_hellman.public_key).decode(
+                'hex')
+            self._data = struct.pack('!2H', group, 0) + self.kex_data
+            self.length = const.PAYLOAD_HEADER.size + len(self._data)
 
 
 class Nonce(IkePayload):
-    def __init__(self, data=None, next_payload=None, critical=False, nonce=None):
-        super(Nonce, self).__init__(data, next_payload, critical)
-        if not nonce:
-            nonce = os.urandom(32)
-        self._data = nonce
-        self.length = const.PAYLOAD_HEADER.size + len(self._data)
+    def parse(self, data):
+        self._data = data[:self.length]
 
+    def __init__(self, data=None, next_payload=None, critical=False,
+                 nonce=None):
+        super(Nonce, self).__init__(data, next_payload, critical)
+        if data is not None:
+            self.parse(data)
+        else:
+            if nonce:
+                self._data = nonce
+            else:
+                self._data = os.urandom(32)
+            self.length = const.PAYLOAD_HEADER.size + len(self._data)
+
+
+class Notify(IkePayload):
+    def parse(self, data):
+        self._data = data[:self.length]
+        self.protocol_id, self.spi_size, self.message_type = struct.unpack(
+            '!2BH', data[:4])
+        self.spi = data[4:4 + self.spi_size]
+        logger.info(
+            'Notify for {0}: {1} (spi {2} [{3}])'.format(self.protocol_id,
+                                                       self.message_type,
+                                                       binascii.hexlify(self.spi),
+                                                       self.spi_size))
+        self.notification_data = data[4 + self.spi_size:self.length]
+
+
+BY_TYPE = {
+    33: SA,
+    34: KE,
+    40: Nonce,
+    41: Notify,
+}

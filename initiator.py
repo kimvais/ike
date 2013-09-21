@@ -19,6 +19,7 @@ class IKEInitiator(DatagramProtocol):
 
     def datagramReceived(self, data, (host, port)):
         print "received %r from %s:%d" % (data, host, port)
+        self.ike.parse(data)
 
     # Possibly invoked if there is no server listening on the
     # address to which we are sending.
