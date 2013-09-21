@@ -44,9 +44,12 @@ class IkePayload(object):
     def data(self):
         return self.header + self._data
 
-    def __str__(self):
-        return "<IKE Payload {0} [{1}]>".format(self.__class__.__name__,
+    def __unicode__(self):
+        return "IKE Payload {0} [{1}]".format(self.__class__.__name__,
                                                 self.length)
+
+    def __repr__(self):
+        return '<{0} at {1}>'.format(self.__unicode__(), hex(id(self)))
 
 
 class SA(IkePayload):
@@ -55,15 +58,17 @@ class SA(IkePayload):
     def __init__(self, data=None, proposals=None, next_payload=None,
                  critical=False):
         super(SA, self).__init__(data, next_payload, critical)
-        if proposals == None:
+        if data is not None:
+            self.parse(data)
+        elif proposals == None:
             self.proposals = [
-                Proposal(1, 'IKE', transforms=[
+                Proposal(None, 1, 'IKE', transforms=[
                     ('ENCR_CAMELLIA_CBC', 256),
                     ('PRF_HMAC_SHA2_256',),
                     ('AUTH_HMAC_SHA2_256_128',),
                     ('DH_GROUP_14',)
                 ]),
-                Proposal(2, 'ESP', transforms=[
+                Proposal(None, 2, 'ESP', transforms=[
                     ('ENCR_CAMELLIA_CBC', 256),
                     ('AUTH_HMAC_SHA2_256_128',)
                 ])
@@ -82,7 +87,13 @@ class SA(IkePayload):
         return reduce(operator.add, ret)
 
     def parse(self, data):
-        logger.critical(binascii.hexlify(data))
+        self.proposals = list()
+        last = False
+        while not last:
+            proposal = Proposal(data=data)
+            self.proposals.append(proposal)
+            last = proposal.last
+            data = data[proposal.len:]
 
 
 class KE(IkePayload):

@@ -1,6 +1,6 @@
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
-from protocol import IKE
+from protocol import IKE, Packet
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -19,7 +19,7 @@ class IKEInitiator(DatagramProtocol):
 
     def datagramReceived(self, data, (host, port)):
         print "received %r from %s:%d" % (data, host, port)
-        self.ike.parse(data)
+        self.ike.packets.append(Packet(data=data))
 
     # Possibly invoked if there is no server listening on the
     # address to which we are sending.
