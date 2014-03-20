@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2013 Kimmo Parviainen-Jalanko.
+# Copyright © 2013-2014 Kimmo Parviainen-Jalanko.
 #
+from functools import reduce
 import logging
 import operator
 import os
@@ -10,6 +11,7 @@ import binascii
 
 import const
 from proposal import Proposal
+
 
 __author__ = 'kimvais'
 
@@ -46,7 +48,7 @@ class IkePayload(object):
 
     def __unicode__(self):
         return "IKE Payload {0} [{1}]".format(self.__class__.__name__,
-                                                self.length)
+                                              self.length)
 
     def __repr__(self):
         return '<{0} at {1}>'.format(self.__unicode__(), hex(id(self)))
@@ -60,7 +62,7 @@ class SA(IkePayload):
         super(SA, self).__init__(data, next_payload, critical)
         if data is not None:
             self.parse(data)
-        elif proposals == None:
+        elif proposals is None:
             self.proposals = [
                 Proposal(None, 1, 'IKE', transforms=[
                     ('ENCR_CAMELLIA_CBC', 256),
@@ -140,9 +142,9 @@ class Notify(IkePayload):
         self.spi = data[4:4 + self.spi_size]
         logger.info(
             'Notify for {0}: {1} (spi {2} [{3}])'.format(self.protocol_id,
-                                                       self.message_type,
-                                                       binascii.hexlify(self.spi),
-                                                       self.spi_size))
+                                                         self.message_type,
+                                                         binascii.hexlify(self.spi),
+                                                         self.spi_size))
         self.notification_data = data[4 + self.spi_size:self.length]
 
 

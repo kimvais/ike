@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2013 Kimmo Parviainen-Jalanko.
+# Copyright © 2013-2014 Kimmo Parviainen-Jalanko.
 #
+from functools import reduce
 import logging
 import os
 import operator
@@ -43,9 +44,9 @@ class Proposal(object):
                     self.spi_len = 4
                 spi_str = os.urandom(self.spi_len)
             if self.spi_len == 8:
-                self.spi, = struct.unpack('!Q', spi_str)
+                self.spi = struct.unpack('!Q', spi_str)[0]
             elif self.spi_len == 4:
-                self.spi, = struct.unpack('!L', spi_str)
+                self.spi = struct.unpack('!L', spi_str)[0]
 
     @property
     def data(self):

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2013 Kimmo Parviainen-Jalanko.
+# Copyright © 2013-2014 Kimmo Parviainen-Jalanko.
 #
 
 # Constants for IKEv2 RFC5996
@@ -81,3 +81,4 @@ for group_id in dh.PRIMES.keys():
 
 TRANFORM_ATTRIBUTES = struct.Struct('!2H')  # (0b10000000 | 14), Key Length
 
+AUTH_MAC_SIZE = 20
