@@ -5,11 +5,17 @@
 #
 import locale
 import os
-import struct
+import sys
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends.openssl import backend
-import sys
+
+
+def pad(data, blocksize=16):
+    """
+    Pads data to blocksize according to RFC 4303. Pad length field is included in output.
+    """
+    return bytes(data + bytearray(range(1, blocksize - len(data) % blocksize + 1)))
 
 
 class Camellia(object):
@@ -24,10 +30,7 @@ class Camellia(object):
         self.dec = self.cipher.decryptor()
 
     def encrypt(self, data):
-        pad = 16 - len(data) % 16
-        if pad:
-            data += struct.pack('B', pad) * pad
-        return self.enc.update(data) + self.enc.finalize()
+        return self.enc.update(pad(data)) + self.enc.finalize()
 
     def decrypt(self, data):
         plain = self.dec.update(data) + self.dec.finalize()
