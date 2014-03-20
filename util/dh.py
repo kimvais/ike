@@ -172,6 +172,6 @@ class DiffieHellman(object):
                               PRIMES[self.group])
 
     def derivate(self, other_key):
-        self.shared_secret = pow(other_key, self.private_key,
-                                 PRIMES[self.group])
+        self.shared_secret = '{0:x}'.format(pow(other_key, self.private_key,
+                                 PRIMES[self.group])).decode('hex')
         return self.shared_secret

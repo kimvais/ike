@@ -11,8 +11,7 @@ from twisted.internet import reactor
 from protocol import IKE, Packet
 
 
-logging.basicConfig(level=logging.DEBUG)
-
+logger = logging.getLogger(__name__)
 
 class IKEInitiator(DatagramProtocol):
     def __init__(self):
@@ -23,18 +22,22 @@ class IKEInitiator(DatagramProtocol):
         port = 500
 
         self.transport.connect(host, port)
-        print("now we can only send to host %s port %d" % (host, port))
+        logger.info("now we can only send to host %s port %d" % (host, port))
         self.transport.write(self.ike.init())  # no need for address
 
     def datagramReceived(self, data, address):
         (host, port) = address
-        print("received %r from %s:%d" % (data, host, port))
+        logger.info("received %r from %s:%d" % (data, host, port))
         self.ike.packets.append(Packet(data=data))
+        ike_auth = self.ike.auth()
+        self.transport.write(ike_auth)
+        self.ike.packets.append(Packet(data=ike_auth))
+        logger.info("IKE AUTH SENT")
 
     # Possibly invoked if there is no server listening on the
     # address to which we are sending.
     def connectionRefused(self):
-        print("No one listening")
+        logger.info("No one listening")
 
 
 def main():
@@ -44,4 +47,5 @@ def main():
 
 
 if __name__ == '__main__':
+    logging.basicConfig()
     main()

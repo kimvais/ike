@@ -20,10 +20,15 @@ from util.prf import prf, prfplus
 
 
 IKE_HEADER = Struct("!2Q4B2I")
-Payload = Struct("!2BH")
+PAYLOAD = Struct("!2BH")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+def to_bytes(x):
+    h = '{0:x}'.format(x)
+    return ('0' * (len(h) % 2) + h).decode('hex')
 
 
 class IKE(object):
@@ -37,6 +42,10 @@ class IKE(object):
     def init(self):
         self.packets.append(Packet())
         return self.packets[-1].sa_init(self.diffie_hellman, self.Ni)
+
+    def auth(self):
+        self.packets.append(Packet())
+        return self.packets[-1].ike_auth(self)
 
 
 class Packet(object):
@@ -68,14 +77,14 @@ class Packet(object):
         ))
         return self.header + self.data
 
-    def ike_auth(self):
+    def ike_auth(self, ike):
 
         plain = bytearray()
 
         # Add IDi (35)
         #
         EMAIL = "k@77.fi"
-        plain += Payload.pack(39, 0, 8 + len(EMAIL))
+        plain += PAYLOAD.pack(39, 0, 8 + len(EMAIL))
         plain += pack("!B3x", 3)  # ID Type (RFC822 address) + reserved
         plain += EMAIL
 
@@ -85,41 +94,43 @@ class Packet(object):
 
         IDi = str(plain)[4:]
 
-        plain += Payload.pack(33, 0, 8 + const.AUTH_MAC_SIZE)  # prf always returns 20 bytes
+        plain += PAYLOAD.pack(33, 0, 8 + const.AUTH_MAC_SIZE)  # prf always returns 20 bytes
         plain += pack("!B3x", 2)  # AUTH Type (psk) + reserved
-        #print "%r\n%r" % (IDi, plain)
+        #logger.debug "%r\n%r" % (IDi, plain)
 
-        SKEYSEED = prf(self.Ni + self.Nr, self.dh.key)
+        # find Nr
+        for p in ike.packets[1].payloads:
+            if p._type == 40:
+                ike.Nr = p._data
+                logger.debug("Responder nonce %r" % ike.Nr)
+            elif p._type == 34:
+                # int_from_bytes = int.from_bytes(p.kex_data, 'big')
+                int_from_bytes = int(str(p.kex_data).encode('hex'), 16)
+                ike.diffie_hellman.derivate(int_from_bytes)
 
-        print("SKEYSEED is: %r\n" % SKEYSEED)
+        SKEYSEED = prf(ike.Ni + ike.Nr, ike.diffie_hellman.shared_secret)
 
-        keymat = prfplus(SKEYSEED, (self.Ni + self.Nr +
-                                    self.iSPI + self.rSPI ),
+        logger.debug("SKEYSEED is: %r\n" % SKEYSEED)
+
+        keymat = prfplus(SKEYSEED, (ike.Ni + ike.Nr +
+                                    to_bytes(ike.iSPI) + to_bytes(ike.rSPI)),
                          3 * 20 + 2 * 32 + 2 * 20)
 
-        print("Got %d bytes of key material" % len(keymat))
+        logger.debug("Got %d bytes of key material" % len(keymat))
         # get keys from material
-        ( self.SK_d,
-          self.SK_ai,
-          self.SK_ar,
-          self.SK_ei,
-          self.SK_er,
-          self.SK_pi,
-          self.SK_pr ) = unpack("20s20s20s32s32s20s20s", keymat[:164])
+        ( ike.SK_d,
+          ike.SK_ai,
+          ike.SK_ar,
+          ike.SK_ei,
+          ike.SK_er,
+          ike.SK_pi,
+          ike.SK_pr ) = unpack("20s20s20s32s32s20s20s", keymat[:164])
 
         # Generate auth payload
 
-        # find Nr
-        for p in self.packets[1].Payloads:
-            if p.type == 40:
-                Nr = p.nonce
-                print("Responder nonce %r" % Nr)
-                break
-
-        message1 = bytearray(self.packets[0].data)
-        print("Original packet len: %d" % len(message1))
-        x = Packet(message1)
-        signed = message1 + Nr + prf(self.SK_pi, IDi)
+        message1 = bytearray(ike.packets[0].data)
+        logger.debug("Original packet len: %d" % len(message1))
+        signed = message1 + ike.Nr + prf(ike.SK_pi, IDi)
         plain += prf(prf(PSK, "Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]  # AUTH data
 
         # Add SA (33)
@@ -127,43 +138,43 @@ class Packet(object):
         self.esp_SPIout = os.urandom(4)
         prop = proposal.Proposal(protocol='ESP', spi=self.esp_SPIout, last=True, transforms=[
             ('ENCR_CAMELLIA_CBC',), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
-        plain += Payload.pack(44, 0, len(prop) + 4) + prop
+        plain += PAYLOAD.pack(44, 0, len(prop.data) + 4) + prop.data
 
         # Generate traffic selectors
         ts = pack("!2BH2H2I", 7, 0, 16, 0, 0, 0, 0)  # Propose everything
 
         # Add TSi (44)
-        plain += Payload.pack(45, 0, 8 + len(ts))
+        plain += PAYLOAD.pack(45, 0, 8 + len(ts))
         plain += pack("!B3x", 1) + ts  # just a single TS
 
         # Add TSr (45)
-        plain += Payload.pack(0, 0, 8 + len(ts))
+        plain += PAYLOAD.pack(0, 0, 8 + len(ts))
         plain += pack("!B3x", 1) + ts  # just a single TS
 
         # Encrypt and hash
         iv = os.urandom(16)
 
-        self.ikecrypto = Camellia(self.SK_ei, iv)
-        self.ikehash = HMAC(self.SK_ai, digestmod=sha1)
+        self.ikecrypto = Camellia(ike.SK_ei, iv)
+        self.ikehash = HMAC(ike.SK_ai, digestmod=sha1)
 
         d = iv + self.ikecrypto.encrypt(plain)
-        data = Payload.pack(35, 0, len(d) + 16) + d
+        data = PAYLOAD.pack(35, 0, len(d) + 16) + d
 
         # IKE Header
         packet = IKE_HEADER.pack(
-            self.iSPI,
-            self.rSPI,
+            ike.iSPI,
+            ike.rSPI,
             46,  # first payload (encrypted)
-            self.version,
+            const.IKE_VERSION,
             35,  # exchange_type (AUTH)
-            self.flags,
+            const.IKE_HDR_FLAGS['I'],
             1,  # message_id
             len(data) + IKE_HEADER.size + 12  # Len
         ) + data
 
         from dump import dump
 
-        print(dump(packet))
+        logger.debug(dump(packet))
         self.ikehash.update(packet)
         mac = self.ikehash.digest()[:12]
         return packet + mac
@@ -177,12 +188,16 @@ class Packet(object):
         while next_payload:
             logger.debug('Next payload: {0}'.format(next_payload))
             logger.debug('{0} bytes remaining'.format(len(remainder)))
-            payload = payloads.BY_TYPE[next_payload](data=remainder)
+            try:
+                payload = payloads.BY_TYPE[next_payload](data=remainder)
+            except KeyError as e:
+                logger.error("Unidentified payload {}".format(e))
+                payload = payloads.IkePayload(data=remainder)
             self.payloads.append(payload)
             logger.debug('Payloads: {0!r}'.format(self.payloads))
             next_payload = payload.next_payload
             remainder = remainder[payload.length:]
-        logger.debug("outta loop")
+        logger.debug("Packed parsed successfully")
 
 
 

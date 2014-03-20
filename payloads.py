@@ -53,6 +53,8 @@ class IkePayload(object):
     def __repr__(self):
         return '<{0} at {1}>'.format(self.__unicode__(), hex(id(self)))
 
+    def parse(self, data):
+        self._data = data
 
 class SA(IkePayload):
     _type = 33
@@ -118,6 +120,8 @@ class KE(IkePayload):
 
 
 class Nonce(IkePayload):
+    _type = 40
+
     def parse(self, data):
         self._data = data[:self.length]
 
