@@ -2,9 +2,11 @@
 #
 # Copyright © 2013 Kimmo Parviainen-Jalanko.
 #
+import os
 import re
 import logging
 from Crypto.Random import random
+import binascii
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -158,14 +160,14 @@ PRIMES = dict(
 class DiffieHellman(object):
     generator = 2
 
-    def __init__(self, group=2, bits=512):
+    def __init__(self, group=14, n=64):
         self.group = group
-        self.bits = bits
-        self.generate_private_key(bits)
+        self.bits = n * 8
+        self.generate_private_key(n)
         self.generate_public_key()
 
-    def generate_private_key(self, bits):
-        self.private_key = random.getrandbits(bits)
+    def generate_private_key(self, n):
+        self.private_key = int(binascii.hexlify(os.urandom(n)), 16)
 
     def generate_public_key(self):
         self.public_key = pow(self.generator, self.private_key,

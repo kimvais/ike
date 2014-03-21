@@ -74,6 +74,7 @@ class SA(IkePayload):
                 ]),
                 Proposal(None, 2, 'ESP', transforms=[
                     ('ENCR_CAMELLIA_CBC', 256),
+                    ('ESN', ),
                     ('AUTH_HMAC_SHA2_256_128',)
                 ])
             ]
@@ -104,8 +105,10 @@ class KE(IkePayload):
     _type = 34
 
     def parse(self, data):
-        self.group, _ = struct.unpack('!2H', data[:4])
-        self.kex_data = data[4:self.length]
+        self.group, _ = struct.unpack('!2H', data[4:8])
+        self.kex_data = data[const.PAYLOAD_HEADER.size+4:self.length]
+        logger.debug("group {}".format(self.group))
+        logger.debug('KEX data: {}'.format(binascii.hexlify(self.kex_data)))
 
     def __init__(self, data=None, next_payload=None, critical=False,
                  group=14, diffie_hellman=None):
@@ -123,7 +126,7 @@ class Nonce(IkePayload):
     _type = 40
 
     def parse(self, data):
-        self._data = data[:self.length]
+        self._data = data[const.PAYLOAD_HEADER.size:self.length]
 
     def __init__(self, data=None, next_payload=None, critical=False,
                  nonce=None):
@@ -140,7 +143,7 @@ class Nonce(IkePayload):
 
 class Notify(IkePayload):
     def parse(self, data):
-        self._data = data[:self.length]
+        self._data = data[4:self.length]
         self.protocol_id, self.spi_size, self.message_type = struct.unpack(
             '!2BH', data[:4])
         self.spi = data[4:4 + self.spi_size]

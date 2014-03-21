@@ -15,7 +15,8 @@ def pad(data, blocksize=16):
     """
     Pads data to blocksize according to RFC 4303. Pad length field is included in output.
     """
-    return bytes(data + bytearray(range(1, blocksize - len(data) % blocksize + 1)))
+    padlen = blocksize - len(data) % blocksize
+    return bytes(data + bytearray(range(1, padlen)) + chr(padlen - 1))
 
 
 class Camellia(object):
@@ -34,6 +35,7 @@ class Camellia(object):
 
     def decrypt(self, data):
         plain = self.dec.update(data) + self.dec.finalize()
+        return plain
         padlen = plain[-1]
         return plain[:-padlen]
 

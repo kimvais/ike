@@ -8,7 +8,7 @@ from hmac import HMAC
 import logging
 import operator
 import os
-from hashlib import sha1, sha256
+from hashlib import sha256
 from struct import Struct, pack, unpack
 import binascii
 
@@ -61,11 +61,11 @@ class Packet(object):
         if data is not None:
             self.parse(data)
 
-    def sa_init(self, dh, nonce=None):
+    def sa_init(self, dh, nonce):
         self.payloads.append(payloads.SA(next_payload="KE"))
         self.payloads.append(payloads.KE(next_payload="Ni",
                                          diffie_hellman=dh))
-        self.payloads.append(payloads.Nonce())
+        self.payloads.append(payloads.Nonce(nonce=nonce))
         self.iSPI = self.payloads[0].spi
         self.data = reduce(operator.add, (x.data for x in self.payloads))
         self.header = bytearray(const.IKE_HEADER.pack(
@@ -95,7 +95,7 @@ class Packet(object):
         #
         PSK = "foo"
 
-        IDi = str(plain)[4:]
+        IDi = bytes(plain)[PAYLOAD.size:]
 
         plain += PAYLOAD.pack(33, 0, 8 + const.AUTH_MAC_SIZE)  # prf always returns 20 bytes
         plain += pack("!B3x", 2)  # AUTH Type (psk) + reserved
@@ -105,15 +105,18 @@ class Packet(object):
         for p in ike.packets[1].payloads:
             if p._type == 40:
                 ike.Nr = p._data
-                logger.debug("Responder nonce %r" % ike.Nr)
+                logger.debug(u"Responder nonce {}".format(binascii.hexlify(ike.Nr)))
             elif p._type == 34:
                 # int_from_bytes = int.from_bytes(p.kex_data, 'big')
                 int_from_bytes = int(str(p.kex_data).encode('hex'), 16)
                 ike.diffie_hellman.derivate(int_from_bytes)
 
+        logger.debug('Nonce I: {}\nNonce R: {}'.format(binascii.hexlify(ike.Ni), binascii.hexlify(ike.Nr)))
+        logger.debug('DH shared secret: {}'.format(binascii.hexlify(ike.diffie_hellman.shared_secret)))
+
         SKEYSEED = prf(ike.Ni + ike.Nr, ike.diffie_hellman.shared_secret)
 
-        logger.debug("SKEYSEED is: %r\n" % SKEYSEED)
+        logger.debug(u"SKEYSEED is: {0!r:s}\n".format(binascii.hexlify(SKEYSEED)))
 
         keymat = prfplus(SKEYSEED, (ike.Ni + ike.Nr +
                                     to_bytes(ike.iSPI) + to_bytes(ike.rSPI)),
@@ -128,7 +131,7 @@ class Packet(object):
           ike.SK_ei,
           ike.SK_er,
           ike.SK_pi,
-          ike.SK_pr ) = unpack("32s32s32s32s32s32s32s", keymat[:32 * 7])
+          ike.SK_pr ) = unpack("32s" * 7, keymat)
 
         # Generate auth payload
 
@@ -141,14 +144,15 @@ class Packet(object):
         #
         self.esp_SPIout = os.urandom(4)
         prop = proposal.Proposal(protocol='ESP', spi=self.esp_SPIout, last=True, transforms=[
-            ('ENCR_CAMELLIA_CBC',), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
+            ('ENCR_CAMELLIA_CBC', 256), ('AUTH_HMAC_SHA2_256_128',)])
+            # ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
         plain += PAYLOAD.pack(44, 0, len(prop.data) + 4) + prop.data
 
         # Generate traffic selectors
         ts = pack("!2BH2H2I", 7, 0, 16, 0, 0, 0, 0)  # Propose everything
 
         # Add TSi (44)
-        plain += PAYLOAD.pack(45, 0, 8 + len(ts))
+        plain += PAYLOAD.pack(45, 0, 8 + len(ts)) # 12 = Payload header, + B3x + TS header
         plain += pack("!B3x", 1) + ts  # just a single TS
 
         # Add TSr (45)
@@ -159,12 +163,13 @@ class Packet(object):
         iv = os.urandom(16)
 
         self.ikecrypto = Camellia(ike.SK_ei, iv)
-        self.ikehash = HMAC(ike.SK_ai, digestmod=sha256)
 
         logger.debug('IV: {}'.format(binascii.hexlify(iv)))
         logger.debug('IKE packet in plain: {}'.format(binascii.hexlify(plain)))
-        d = iv + self.ikecrypto.encrypt(plain)
-        data = PAYLOAD.pack(35, 0, len(d) + PAYLOAD.size) + d
+        # Encrypt
+        ciphertext = self.ikecrypto.encrypt(plain)
+        payload_len = PAYLOAD.size + len(iv) + len(ciphertext) + MACLEN
+        data = PAYLOAD.pack(35, 0, payload_len) + iv + ciphertext
 
         # IKE Header
         packet = IKE_HEADER.pack(
@@ -175,12 +180,14 @@ class Packet(object):
             35,  # exchange_type (AUTH)
             const.IKE_HDR_FLAGS['I'],
             1,  # message_id
-            len(data) + IKE_HEADER.size
+            len(data) + IKE_HEADER.size + MACLEN
         ) + data
 
         from dump import dump
 
         logger.debug(dump(packet))
+        # Sign
+        self.ikehash = HMAC(ike.SK_ai, digestmod=sha256)
         self.ikehash.update(packet)
         mac = self.ikehash.digest()[:MACLEN]
         logger.debug("HMAC: {}".format(mac.encode('hex')))
