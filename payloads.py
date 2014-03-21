@@ -152,9 +152,17 @@ class Notify(IkePayload):
         self.notification_data = data[4 + self.spi_size:self.length]
 
 
+class IDi(IkePayload):
+    pass
+
+class IDr(IkePayload):
+    pass
+
 BY_TYPE = {
     33: SA,
     34: KE,
+    35: IDi,
+    36: IDr,
     40: Nonce,
     41: Notify,
 }

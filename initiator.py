@@ -28,10 +28,12 @@ class IKEInitiator(DatagramProtocol):
     def datagramReceived(self, data, address):
         (host, port) = address
         logger.info("received %r from %s:%d" % (data, host, port))
-        self.ike.packets.append(Packet(data=data))
+        packet = Packet(data=data)
+        self.ike.rSPI = packet.rSPI
+        self.ike.packets.append(packet)
         ike_auth = self.ike.auth()
         self.transport.write(ike_auth)
-        self.ike.packets.append(Packet(data=ike_auth))
+        # self.ike.packets.append(Packet(data=ike_auth))
         logger.info("IKE AUTH SENT")
 
     # Possibly invoked if there is no server listening on the

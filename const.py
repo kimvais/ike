@@ -81,4 +81,4 @@ for group_id in dh.PRIMES.keys():
 
 TRANFORM_ATTRIBUTES = struct.Struct('!2H')  # (0b10000000 | 14), Key Length
 
-AUTH_MAC_SIZE = 32
+AUTH_MAC_SIZE = 20
