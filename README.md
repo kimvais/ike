@@ -3,6 +3,10 @@ pyike
 
 The goal of this project is to be a minimalistic IKEv2 (RFC 5996) implementation in Python. 
 
+## Status
+This project is in *very, very* early stages. The code is somewhat hideous mess of spaghetti and does not
+adhere to any standards required of a security software. Use at own risk. Or preferably, don't use at all yet.
+
 ## Design principles
 - Minimal amount of code.
 - Support *MUST* features of draft-kivinen-ipsecme-ikev2-rfc5996 (RFC 5996
