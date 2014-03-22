@@ -56,6 +56,7 @@ class IkePayload(object):
     def parse(self, data):
         self._data = data
 
+
 class SA(IkePayload):
     _type = 33
 
@@ -106,7 +107,7 @@ class KE(IkePayload):
 
     def parse(self, data):
         self.group, _ = struct.unpack('!2H', data[4:8])
-        self.kex_data = data[const.PAYLOAD_HEADER.size+4:self.length]
+        self.kex_data = data[const.PAYLOAD_HEADER.size + 4:self.length]
         logger.debug("group {}".format(self.group))
         logger.debug('KEX data: {}'.format(binascii.hexlify(self.kex_data)))
 
@@ -116,8 +117,7 @@ class KE(IkePayload):
         if data is not None:
             self.parse(data)
         else:
-            self.kex_data = '{0:x}'.format(diffie_hellman.public_key).decode(
-                'hex')
+            self.kex_data = diffie_hellman.public_key.to_bytes(diffie_hellman.public_key.bit_length(), 'big')
             self._data = struct.pack('!2H', group, 0) + self.kex_data
             self.length = const.PAYLOAD_HEADER.size + len(self._data)
 
@@ -158,8 +158,10 @@ class Notify(IkePayload):
 class IDi(IkePayload):
     pass
 
+
 class IDr(IkePayload):
     pass
+
 
 BY_TYPE = {
     33: SA,

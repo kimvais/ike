@@ -15,8 +15,8 @@ def prf(key, data, hash_algorithm='sha256'):
 
 
 def prfplus(key, data, n):
-    ret = str()
-    prev = ''
+    ret = bytes()
+    prev = bytes()
     round = 1
     while len(ret) < n:
         prev = prf(key, prev + data + pack("!B", round))

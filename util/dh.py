@@ -5,8 +5,8 @@
 import os
 import re
 import logging
-from Crypto.Random import random
 import binascii
+from util.conv import to_bytes
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -174,6 +174,9 @@ class DiffieHellman(object):
                               PRIMES[self.group])
 
     def derivate(self, other_key):
-        self.shared_secret = '{0:x}'.format(pow(other_key, self.private_key,
-                                 PRIMES[self.group])).decode('hex')
+        self._s = pow(other_key, self.private_key, PRIMES[self.group])
         return self.shared_secret
+
+    @property
+    def shared_secret(self):
+        return to_bytes(self._s)

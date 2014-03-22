@@ -16,7 +16,7 @@ def pad(data, blocksize=16):
     Pads data to blocksize according to RFC 4303. Pad length field is included in output.
     """
     padlen = blocksize - len(data) % blocksize
-    return bytes(data + bytearray(range(1, padlen)) + chr(padlen - 1))
+    return bytes(data + bytearray(range(1, padlen)) + bytearray((padlen - 1,)))
 
 
 class Camellia(object):

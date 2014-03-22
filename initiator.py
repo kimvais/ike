@@ -6,33 +6,27 @@
 import logging
 
 # TODO: Replace Twisted with asyncio - will require Python 3.4
-from twisted.internet.protocol import DatagramProtocol
-from twisted.internet import reactor
+import asyncio
 from protocol import IKE, Packet
 
 
-logger = logging.getLogger(__name__)
 
-class IKEInitiator(DatagramProtocol):
+class IKEInitiator(asyncio.DatagramProtocol):
     def __init__(self):
         self.ike = IKE()
 
-    def startProtocol(self):
-        host = "192.168.0.9"
-        port = 500
+    def connection_made(self, transport):
+        self.transport = transport
+        self.transport.sendto(self.ike.init())  # no need for address
 
-        self.transport.connect(host, port)
-        logger.info("now we can only send to host %s port %d" % (host, port))
-        self.transport.write(self.ike.init())  # no need for address
-
-    def datagramReceived(self, data, address):
+    def datagram_received(self, data, address):
         (host, port) = address
         logger.info("received %r from %s:%d" % (data, host, port))
         packet = Packet(data=data)
         self.ike.rSPI = packet.rSPI
         self.ike.packets.append(packet)
         ike_auth = self.ike.auth()
-        self.transport.write(ike_auth)
+        self.transport.sendto(ike_auth)
         # self.ike.packets.append(Packet(data=ike_auth))
         logger.info("IKE AUTH SENT")
 
@@ -43,11 +37,17 @@ class IKEInitiator(DatagramProtocol):
 
 
 def main():
-    # 0 means any port, we don't care in this case
-    reactor.listenUDP(0, IKEInitiator())
-    reactor.run()
+    host = "192.168.0.9"
+    port = 500
+    loop = asyncio.get_event_loop()
+    t = asyncio.Task(loop.create_datagram_endpoint(IKEInitiator , remote_addr=(host, port)))
+    loop.run_until_complete(t)
+    loop.run_forever()
 
 
 if __name__ == '__main__':
-    logging.basicConfig()
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger('MAIN')
+    logger.setLevel(logging.DEBUG)
+    logger.debug("testing")
     main()

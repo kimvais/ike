@@ -12,10 +12,13 @@ from hashlib import sha256
 from struct import Struct, pack, unpack
 import binascii
 
+from util import dump
+
 from util.cipher import Camellia
 import payloads
 import const
 import proposal
+from util.conv import to_bytes
 from util.dh import DiffieHellman
 from util.prf import prf, prfplus
 
@@ -25,11 +28,6 @@ PAYLOAD = Struct("!2BH")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
-def to_bytes(x):
-    h = '{0:x}'.format(x)
-    return ('0' * (len(h) % 2) + h).decode('hex')
 
 
 class IKE(object):
@@ -86,14 +84,14 @@ class Packet(object):
         MACLEN = 16
         # Add IDi (35)
         #
-        EMAIL = "k@77.fi"
+        EMAIL = b"k@77.fi"
         plain += PAYLOAD.pack(39, 0, 8 + len(EMAIL))
         plain += pack("!B3x", 3)  # ID Type (RFC822 address) + reserved
         plain += EMAIL
 
         # Add AUTH (39)
         #
-        PSK = "foo"
+        PSK = b"foo"
 
         IDi = bytes(plain)[PAYLOAD.size:]
 
@@ -107,8 +105,8 @@ class Packet(object):
                 ike.Nr = p._data
                 logger.debug(u"Responder nonce {}".format(binascii.hexlify(ike.Nr)))
             elif p._type == 34:
-                # int_from_bytes = int.from_bytes(p.kex_data, 'big')
-                int_from_bytes = int(str(p.kex_data).encode('hex'), 16)
+                int_from_bytes = int.from_bytes(p.kex_data, 'big')
+                #int_from_bytes = int(str(p.kex_data).encode('hex'), 16)
                 ike.diffie_hellman.derivate(int_from_bytes)
 
         logger.debug('Nonce I: {}\nNonce R: {}'.format(binascii.hexlify(ike.Ni), binascii.hexlify(ike.Nr)))
@@ -138,7 +136,7 @@ class Packet(object):
         message1 = bytearray(ike.packets[0].data)
         logger.debug("Original packet len: %d" % len(message1))
         signed = message1 + ike.Nr + prf(ike.SK_pi, IDi)
-        plain += prf(prf(PSK, "Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]  # AUTH data
+        plain += prf(prf(PSK, b"Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]  # AUTH data
 
         # Add SA (33)
         #
@@ -183,14 +181,12 @@ class Packet(object):
             len(data) + IKE_HEADER.size + MACLEN
         ) + data
 
-        from dump import dump
-
         logger.debug(dump(packet))
         # Sign
         self.ikehash = HMAC(ike.SK_ai, digestmod=sha256)
         self.ikehash.update(packet)
         mac = self.ikehash.digest()[:MACLEN]
-        logger.debug("HMAC: {}".format(mac.encode('hex')))
+        logger.debug("HMAC: {}".format(binascii.hexlify(mac)))
         return packet + mac
 
     def parse(self, data):
