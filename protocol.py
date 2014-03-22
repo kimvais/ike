@@ -12,8 +12,7 @@ from hashlib import sha256
 from struct import Struct, pack, unpack
 import binascii
 
-from util import dump
-
+from util.dump import dump
 from util.cipher import Camellia
 import payloads
 import const
@@ -39,46 +38,34 @@ class IKE(object):
         self.packets = list()
 
     def init(self):
-        self.packets.append(Packet())
-        return self.packets[-1].sa_init(self.diffie_hellman, self.Ni)
-
-    def auth(self):
-        self.iSPI = self.packets[0].iSPI
-        self.rSPI = self.packets[-1].rSPI
-        self.packets.append(Packet())
-        return self.packets[-1].ike_auth(self)
-
-
-class Packet(object):
-    def __init__(self, data=None, exchange_type=None):
-        self.payloads = list()
-        self.data = ''
-        self.iSPI = self.rSPI = 0
-        self.length = 0
-        self.header = ''
-        if data is not None:
-            self.parse(data)
-
-    def sa_init(self, dh, nonce):
-        self.payloads.append(payloads.SA(next_payload="KE"))
-        self.payloads.append(payloads.KE(next_payload="Ni",
-                                         diffie_hellman=dh))
-        self.payloads.append(payloads.Nonce(nonce=nonce))
-        self.iSPI = self.payloads[0].spi
-        self.data = reduce(operator.add, (x.data for x in self.payloads))
-        self.header = bytearray(const.IKE_HEADER.pack(
+        packet = Packet()
+        self.packets.append(packet)
+        packet.payloads.append(payloads.SA(next_payload="KE"))
+        packet.payloads.append(payloads.KE(next_payload="Ni",
+                                           diffie_hellman=self.diffie_hellman))
+        packet.payloads.append(payloads.Nonce(nonce=self.Ni))
+        self.iSPI = packet.payloads[0].spi
+        packet.data = reduce(operator.add, (x.data for x in packet.payloads))
+        packet.header = bytearray(const.IKE_HEADER.pack(
             self.iSPI,
             self.rSPI,
-            self.payloads[0]._type,
+            packet.payloads[0]._type,
             const.IKE_VERSION,
             const.IKE_SA_INIT,
             const.IKE_HDR_FLAGS['I'],
             0,
-            (len(self.data) + const.IKE_HEADER.size)
+            (len(packet.data) + const.IKE_HEADER.size)
         ))
-        return self.header + self.data
+        return packet.header + packet.data
 
-    def ike_auth(self, ike):
+    def auth(self):
+        # self.iSPI = self.packets[0].iSPI
+        # self.rSPI = self.packets[-1].rSPI
+        self.packets.append(Packet())
+        return self.ike_auth(self)
+
+
+    def ike_auth(self, packet):
 
         plain = bytearray()
         MACLEN = 16
@@ -100,42 +87,42 @@ class Packet(object):
         #logger.debug "%r\n%r" % (IDi, plain)
 
         # find Nr
-        for p in ike.packets[1].payloads:
+        for p in self.packets[1].payloads:
             if p._type == 40:
-                ike.Nr = p._data
-                logger.debug(u"Responder nonce {}".format(binascii.hexlify(ike.Nr)))
+                self.Nr = p._data
+                logger.debug(u"Responder nonce {}".format(binascii.hexlify(self.Nr)))
             elif p._type == 34:
                 int_from_bytes = int.from_bytes(p.kex_data, 'big')
                 #int_from_bytes = int(str(p.kex_data).encode('hex'), 16)
-                ike.diffie_hellman.derivate(int_from_bytes)
+                self.diffie_hellman.derivate(int_from_bytes)
 
-        logger.debug('Nonce I: {}\nNonce R: {}'.format(binascii.hexlify(ike.Ni), binascii.hexlify(ike.Nr)))
-        logger.debug('DH shared secret: {}'.format(binascii.hexlify(ike.diffie_hellman.shared_secret)))
+        logger.debug('Nonce I: {}\nNonce R: {}'.format(binascii.hexlify(self.Ni), binascii.hexlify(self.Nr)))
+        logger.debug('DH shared secret: {}'.format(binascii.hexlify(self.diffie_hellman.shared_secret)))
 
-        SKEYSEED = prf(ike.Ni + ike.Nr, ike.diffie_hellman.shared_secret)
+        SKEYSEED = prf(self.Ni + self.Nr, self.diffie_hellman.shared_secret)
 
         logger.debug(u"SKEYSEED is: {0!r:s}\n".format(binascii.hexlify(SKEYSEED)))
 
-        keymat = prfplus(SKEYSEED, (ike.Ni + ike.Nr +
-                                    to_bytes(ike.iSPI) + to_bytes(ike.rSPI)),
+        keymat = prfplus(SKEYSEED, (self.Ni + self.Nr +
+                                    to_bytes(self.iSPI) + to_bytes(self.rSPI)),
                          32 * 7)
         #3 * 32 + 2 * 32 + 2 * 32)
 
         logger.debug("Got %d bytes of key material" % len(keymat))
         # get keys from material
-        ( ike.SK_d,
-          ike.SK_ai,
-          ike.SK_ar,
-          ike.SK_ei,
-          ike.SK_er,
-          ike.SK_pi,
-          ike.SK_pr ) = unpack("32s" * 7, keymat)
+        ( self.SK_d,
+          self.SK_ai,
+          self.SK_ar,
+          self.SK_ei,
+          self.SK_er,
+          self.SK_pi,
+          self.SK_pr ) = unpack("32s" * 7, keymat)
 
         # Generate auth payload
 
-        message1 = bytearray(ike.packets[0].data)
+        message1 = bytearray(self.packets[0].data)
         logger.debug("Original packet len: %d" % len(message1))
-        signed = message1 + ike.Nr + prf(ike.SK_pi, IDi)
+        signed = message1 + self.Nr + prf(self.SK_pi, IDi)
         plain += prf(prf(PSK, b"Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]  # AUTH data
 
         # Add SA (33)
@@ -160,54 +147,83 @@ class Packet(object):
         # Encrypt and hash
         iv = os.urandom(16)
 
-        self.ikecrypto = Camellia(ike.SK_ei, iv)
+        ikecrypto = Camellia(self.SK_ei, iv)
 
         logger.debug('IV: {}'.format(binascii.hexlify(iv)))
         logger.debug('IKE packet in plain: {}'.format(binascii.hexlify(plain)))
         # Encrypt
-        ciphertext = self.ikecrypto.encrypt(plain)
+        ciphertext = ikecrypto.encrypt(plain)
         payload_len = PAYLOAD.size + len(iv) + len(ciphertext) + MACLEN
-        data = PAYLOAD.pack(35, 0, payload_len) + iv + ciphertext
+        enc_payload = PAYLOAD.pack(35, 0, payload_len) + iv + ciphertext
 
         # IKE Header
-        packet = IKE_HEADER.pack(
-            ike.iSPI,
-            ike.rSPI,
+        data = IKE_HEADER.pack(
+            self.iSPI,
+            self.rSPI,
             46,  # first payload (encrypted)
             const.IKE_VERSION,
             35,  # exchange_type (AUTH)
             const.IKE_HDR_FLAGS['I'],
             1,  # message_id
-            len(data) + IKE_HEADER.size + MACLEN
-        ) + data
+            len(enc_payload) + IKE_HEADER.size + MACLEN
+        ) + enc_payload
 
-        logger.debug(dump.dump(packet))
+        logger.debug(dump(data))
         # Sign
-        self.ikehash = HMAC(ike.SK_ai, digestmod=sha256)
-        self.ikehash.update(packet)
-        mac = self.ikehash.digest()[:MACLEN]
+        ikehash = HMAC(self.SK_ai, digestmod=sha256)
+        ikehash.update(data)
+        mac = ikehash.digest()[:MACLEN]
         logger.debug("HMAC: {}".format(binascii.hexlify(mac)))
-        return packet + mac
+        return data + mac
 
-    def parse(self, data):
-        data = bytearray(data)
-        self.header = data[0:const.IKE_HEADER.size]
-        (self.iSPI, self.rSPI, next_payload, self.version, self.exchange_type, self.flags,
-         self.message_id, self.length) = const.IKE_HEADER.unpack(self.header)
-        remainder = data[const.IKE_HEADER.size:]
-        while next_payload:
-            logger.debug('Next payload: {0}'.format(next_payload))
-            logger.debug('{0} bytes remaining'.format(len(remainder)))
-            try:
-                payload = payloads.BY_TYPE[next_payload](data=remainder)
-            except KeyError as e:
-                logger.error("Unidentified payload {}".format(e))
-                payload = payloads.IkePayload(data=remainder)
-            self.payloads.append(payload)
-            logger.debug('Payloads: {0!r}'.format(self.payloads))
-            next_payload = payload.next_payload
-            remainder = remainder[payload.length:]
-        logger.debug("Packed parsed successfully")
 
+class Packet(object):
+    def __init__(self, data=None, exchange_type=None):
+        self.payloads = list()
+        self.data = ''
+        self.iSPI = self.rSPI = 0
+        self.length = 0
+        self.header = ''
+
+
+def parse_packet(data, ike=None):
+    packet = Packet()
+    data = bytearray(data)
+    packet.header = data[0:const.IKE_HEADER.size]
+    (packet.iSPI, packet.rSPI, next_payload, packet.version, packet.exchange_type, packet.flags,
+     packet.message_id, packet.length) = const.IKE_HEADER.unpack(packet.header)
+    remainder = data[const.IKE_HEADER.size:]
+    logger.debug("next payload: {}".format(next_payload))
+    if next_payload == 46:
+        # Decrypt!
+        next_payload, is_critical, payload_len = PAYLOAD.unpack(remainder[:PAYLOAD.size])
+        try:
+            iv = remainder[PAYLOAD.size:PAYLOAD.size + 16]
+            ciphertext = remainder[PAYLOAD.size + 16:payload_len]  # HMAC size
+            mac = remainder[:-16]
+        except IndexError:
+            logger.critical('Malformed packet')
+
+        logger.debug('IV: {}'.format(dump(iv)))
+        logger.debug('CIPERTEXT: {}'.format(dump(ciphertext)))
+        logger.debug('MAC: {}'.format(dump(mac)))
+        hmac = HMAC(ike.SK_ar, digestmod=sha256)
+        hmac.update(data[:-16])
+        logger.debug(hmac.hexdigest())
+        assert dump(mac) == hmac.hexdigest()[:16]
+    while next_payload:
+        logger.debug('Next payload: {0}'.format(next_payload))
+        logger.debug('{0} bytes remaining'.format(len(remainder)))
+        try:
+            payload = payloads.BY_TYPE[next_payload](data=remainder)
+        except KeyError as e:
+            logger.error("Unidentified payload {}".format(e))
+            payload = payloads.IkePayload(data=remainder)
+        packet.payloads.append(payload)
+        logger.debug('Payloads: {0!r}'.format(packet.payloads))
+        next_payload = payload.next_payload
+        remainder = remainder[payload.length:]
+    logger.debug("Packed parsed successfully")
+    return packet
 
 

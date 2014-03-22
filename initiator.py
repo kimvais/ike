@@ -4,11 +4,9 @@
 #
 
 import logging
-
-# TODO: Replace Twisted with asyncio - will require Python 3.4
 import asyncio
-from protocol import IKE, Packet
 
+from protocol import IKE, parse_packet
 
 
 class IKEInitiator(asyncio.DatagramProtocol):
@@ -22,7 +20,8 @@ class IKEInitiator(asyncio.DatagramProtocol):
     def datagram_received(self, data, address):
         (host, port) = address
         logger.info("received %r from %s:%d" % (data, host, port))
-        packet = Packet(data=data)
+        packet = parse_packet(data=data, ike=self.ike)
+        logger.debug("Got responder SPI: {0:x}".format(packet.rSPI))
         self.ike.rSPI = packet.rSPI
         self.ike.packets.append(packet)
         ike_auth = self.ike.auth()
@@ -40,7 +39,7 @@ def main():
     host = "192.168.0.9"
     port = 500
     loop = asyncio.get_event_loop()
-    t = asyncio.Task(loop.create_datagram_endpoint(IKEInitiator , remote_addr=(host, port)))
+    t = asyncio.Task(loop.create_datagram_endpoint(IKEInitiator, remote_addr=(host, port)))
     loop.run_until_complete(t)
     loop.run_forever()
 
