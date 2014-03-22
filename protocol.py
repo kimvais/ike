@@ -119,7 +119,7 @@ class Packet(object):
         keymat = prfplus(SKEYSEED, (ike.Ni + ike.Nr +
                                     to_bytes(ike.iSPI) + to_bytes(ike.rSPI)),
                          32 * 7)
-                         #3 * 32 + 2 * 32 + 2 * 32)
+        #3 * 32 + 2 * 32 + 2 * 32)
 
         logger.debug("Got %d bytes of key material" % len(keymat))
         # get keys from material
@@ -143,14 +143,14 @@ class Packet(object):
         self.esp_SPIout = os.urandom(4)
         prop = proposal.Proposal(protocol='ESP', spi=self.esp_SPIout, last=True, transforms=[
             ('ENCR_CAMELLIA_CBC', 256), ('AUTH_HMAC_SHA2_256_128',)])
-            # ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
+        # ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
         plain += PAYLOAD.pack(44, 0, len(prop.data) + 4) + prop.data
 
         # Generate traffic selectors
         ts = pack("!2BH2H2I", 7, 0, 16, 0, 0, 0, 0)  # Propose everything
 
         # Add TSi (44)
-        plain += PAYLOAD.pack(45, 0, 8 + len(ts)) # 12 = Payload header, + B3x + TS header
+        plain += PAYLOAD.pack(45, 0, 8 + len(ts))  # 12 = Payload header, + B3x + TS header
         plain += pack("!B3x", 1) + ts  # just a single TS
 
         # Add TSr (45)
@@ -181,7 +181,7 @@ class Packet(object):
             len(data) + IKE_HEADER.size + MACLEN
         ) + data
 
-        logger.debug(dump(packet))
+        logger.debug(dump.dump(packet))
         # Sign
         self.ikehash = HMAC(ike.SK_ai, digestmod=sha256)
         self.ikehash.update(packet)
