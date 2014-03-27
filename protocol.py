@@ -86,6 +86,7 @@ class IKE(object):
         plain += pack("!B3x", 2)  # AUTH Type (psk) + reserved
         #logger.debug "%r\n%r" % (IDi, plain)
 
+        # XXX: This should be parsed when receiving.
         # find Nr
         for p in self.packets[1].payloads:
             if p._type == 40:

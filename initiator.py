@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # Copyright © 2013-2014 Kimmo Parviainen-Jalanko.
@@ -5,6 +6,14 @@
 
 import logging
 import asyncio
+import docopt
+
+__doc__ = """
+IKE v2 (RFC 5996) initiator implementation
+
+Usage:
+    {} <remote_peer>
+""".format(__file__)
 
 from protocol import IKE, parse_packet
 
@@ -15,16 +24,18 @@ class IKEInitiator(asyncio.DatagramProtocol):
 
     def connection_made(self, transport):
         self.transport = transport
+        logger.info("Sending INIT")
         self.transport.sendto(self.ike.init())  # no need for address
 
     def datagram_received(self, data, address):
         (host, port) = address
-        logger.info("received %r from %s:%d" % (data, host, port))
+        logger.info("Received %r from %s:%d" % (data, host, port))
         packet = parse_packet(data=data, ike=self.ike)
         logger.debug("Got responder SPI: {0:x}".format(packet.rSPI))
         self.ike.rSPI = packet.rSPI
         self.ike.packets.append(packet)
         ike_auth = self.ike.auth()
+        logger.info("Sending AUTH")
         self.transport.sendto(ike_auth)
         # self.ike.packets.append(Packet(data=ike_auth))
         logger.info("IKE AUTH SENT")
@@ -35,18 +46,18 @@ class IKEInitiator(asyncio.DatagramProtocol):
         logger.info("No one listening")
 
 
-def main():
-    host = "192.168.0.9"
+def main(peer):
     port = 500
     loop = asyncio.get_event_loop()
-    t = asyncio.Task(loop.create_datagram_endpoint(IKEInitiator, remote_addr=(host, port)))
+    t = asyncio.Task(loop.create_datagram_endpoint(IKEInitiator, remote_addr=(peer, port)))
     loop.run_until_complete(t)
     loop.run_forever()
 
 
 if __name__ == '__main__':
+    opts = docopt.docopt(__doc__)
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger('MAIN')
     logger.setLevel(logging.DEBUG)
-    logger.debug("testing")
-    main()
+    logger.info("Starting...")
+    main(opts['<remote_peer>'])
