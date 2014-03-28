@@ -197,7 +197,6 @@ def parse_packet(data, ike=None):
     remainder = data[const.IKE_HEADER.size:]
     logger.debug("next payload: {}".format(next_payload))
     if next_payload == 46:
-        # Decrypt!
         next_payload, is_critical, payload_len = PAYLOAD.unpack(remainder[:PAYLOAD.size])
         try:
             iv = remainder[PAYLOAD.size:PAYLOAD.size + 16]
@@ -211,8 +210,10 @@ def parse_packet(data, ike=None):
         hmac = HMAC(ike.SK_ar, digestmod=sha256)
         hmac.update(raw_data[:-MACLEN])
         hmac_ours = hmac.digest()[:MACLEN]
-        logger.debug('HMAC verify (ours){} (theirs){}'.format(binascii.hexlify(hmac_ours), binascii.hexlify(hmac_theirs)))
-        assert hmac_ours == hmac_theirs
+        logger.debug('HMAC verify (ours){} (theirs){}'.format(
+            binascii.hexlify(hmac_ours), binascii.hexlify(hmac_theirs)))
+        assert hmac_ours == hmac_theirs  # TODO: raise IkeError
+        # TODO: Decrypt
     while next_payload:
         logger.debug('Next payload: {0}'.format(next_payload))
         logger.debug('{0} bytes remaining'.format(len(remainder)))

@@ -30,6 +30,8 @@ class IKEInitiator(asyncio.DatagramProtocol):
     def datagram_received(self, data, address):
         (host, port) = address
         logger.info("Received %r from %s:%d" % (data, host, port))
+        # TODO: Read SPIs and Exchange type and decide what to do based on that instead of
+        # doing it like this:
         packet = parse_packet(data=data, ike=self.ike)
         logger.debug("Got responder SPI: {0:x}".format(packet.rSPI))
         self.ike.rSPI = packet.rSPI
@@ -50,6 +52,7 @@ def main(peer):
     port = 500
     loop = asyncio.get_event_loop()
     t = asyncio.Task(loop.create_datagram_endpoint(IKEInitiator, remote_addr=(peer, port)))
+    # TODO: Retransmissions should be handled here? IKE() should store it's negotiation state.
     loop.run_until_complete(t)
     loop.run_forever()
 
