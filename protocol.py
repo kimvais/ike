@@ -24,6 +24,7 @@ from util.prf import prf, prfplus
 
 IKE_HEADER = Struct("!2Q4B2I")
 PAYLOAD = Struct("!2BH")
+MACLEN = 16
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -68,7 +69,6 @@ class IKE(object):
     def ike_auth(self, packet):
 
         plain = bytearray()
-        MACLEN = 16
         # Add IDi (35)
         #
         EMAIL = b"k@77.fi"
@@ -188,8 +188,9 @@ class Packet(object):
 
 
 def parse_packet(data, ike=None):
+    raw_data = data
     packet = Packet()
-    data = bytearray(data)
+    data = bytearray(raw_data)
     packet.header = data[0:const.IKE_HEADER.size]
     (packet.iSPI, packet.rSPI, next_payload, packet.version, packet.exchange_type, packet.flags,
      packet.message_id, packet.length) = const.IKE_HEADER.unpack(packet.header)
@@ -201,17 +202,17 @@ def parse_packet(data, ike=None):
         try:
             iv = remainder[PAYLOAD.size:PAYLOAD.size + 16]
             ciphertext = remainder[PAYLOAD.size + 16:payload_len]  # HMAC size
-            mac = remainder[:-16]
+            hmac_theirs = remainder[-MACLEN:]
         except IndexError:
             logger.critical('Malformed packet')
 
         logger.debug('IV: {}'.format(dump(iv)))
         logger.debug('CIPERTEXT: {}'.format(dump(ciphertext)))
-        logger.debug('MAC: {}'.format(dump(mac)))
         hmac = HMAC(ike.SK_ar, digestmod=sha256)
-        hmac.update(data[:-16])
-        logger.debug(hmac.hexdigest())
-        assert dump(mac) == hmac.hexdigest()[:16]
+        hmac.update(raw_data[:-MACLEN])
+        hmac_ours = hmac.digest()[:MACLEN]
+        logger.debug('HMAC verify (ours){} (theirs){}'.format(binascii.hexlify(hmac_ours), binascii.hexlify(hmac_theirs)))
+        assert hmac_ours == hmac_theirs
     while next_payload:
         logger.debug('Next payload: {0}'.format(next_payload))
         logger.debug('{0} bytes remaining'.format(len(remainder)))
