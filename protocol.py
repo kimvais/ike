@@ -12,9 +12,9 @@ from hashlib import sha256
 from struct import Struct, pack, unpack
 import binascii
 
+import payloads
 from util.dump import dump
 from util.cipher import Camellia
-import payloads
 import const
 import proposal
 from util.conv import to_bytes
@@ -206,7 +206,7 @@ def parse_packet(data, ike=None):
             logger.critical('Malformed packet')
 
         logger.debug('IV: {}'.format(dump(iv)))
-        logger.debug('CIPERTEXT: {}'.format(dump(ciphertext)))
+        logger.debug('CIPHERTEXT: {}'.format(dump(ciphertext)))
         hmac = HMAC(ike.SK_ar, digestmod=sha256)
         hmac.update(raw_data[:-MACLEN])
         hmac_ours = hmac.digest()[:MACLEN]

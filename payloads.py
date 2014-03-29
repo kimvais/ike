@@ -2,6 +2,7 @@
 #
 # Copyright © 2013-2014 Kimmo Parviainen-Jalanko.
 #
+from enum import IntEnum
 from functools import reduce
 import logging
 import operator
@@ -19,10 +20,22 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
+class Type(IntEnum):
+    SA = 33
+    KE = 34
+    Nonce = 40
+    IDi = 35,
+    IDr = 36
+    Notify = 41
+    Encrypted = 46
+
+
+
 class IkePayload(object):
     _type = None
 
     def __init__(self, data=None, next_payload=None, critical=False):
+        self._type = Type[self.__class__.__name__]
         if data is not None:
             self.next_payload, self.flags, self.length = const.PAYLOAD_HEADER.unpack(
                 data[:const.PAYLOAD_HEADER.size])
@@ -58,7 +71,6 @@ class IkePayload(object):
 
 
 class SA(IkePayload):
-    _type = 33
 
     def __init__(self, data=None, proposals=None, next_payload=None,
                  critical=False):
@@ -103,7 +115,6 @@ class SA(IkePayload):
 
 
 class KE(IkePayload):
-    _type = 34
 
     def parse(self, data):
         self.group, _ = struct.unpack('!2H', data[4:8])
@@ -123,7 +134,6 @@ class KE(IkePayload):
 
 
 class Nonce(IkePayload):
-    _type = 40
 
     def parse(self, data):
         self._data = data[const.PAYLOAD_HEADER.size:self.length]
