@@ -8,7 +8,10 @@ import os
 import operator
 import struct
 import binascii
+
 import const
+from const import ProtocolID
+
 
 __author__ = 'kimvais'
 
@@ -17,9 +20,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class Proposal(object):
-    PROTOCOL_IDS = dict(IKE=1, ESP=3)
-
-    def __init__(self, data=None, num=1, protocol='IKE', spi=None, spi_len=0,
+    def __init__(self, data=None, num=1, protocol=ProtocolID.IKE, spi=None, spi_len=0,
                  last=False, transforms=None):
         if data is not None:
             self.parse(data)
@@ -31,16 +32,16 @@ class Proposal(object):
                 self.transforms[-1].last = True
             self.last = last
             self.num = num
-            self.protocol_id = Proposal.PROTOCOL_IDS[protocol]
+            self.protocol_id = protocol
             if spi is not None:
                 spi_str = spi
                 self.spi_len = len(spi)
             else:
                 self.spi_len = spi_len
             if not self.spi_len:
-                if protocol == "IKE":
+                if protocol == ProtocolID.IKE:
                     self.spi_len = 8
-                elif protocol in ('ESP', 'AH'):
+                elif protocol in (ProtocolID.ESP, ProtocolID.AH):
                     self.spi_len = 4
                 spi_str = os.urandom(self.spi_len)
             if self.spi_len == 8:
@@ -86,7 +87,6 @@ class Proposal(object):
             logger.debug('SPI: {0}'.format(hex(self.spi)))
         else:
             self.spi = None
-
 
 
 class Transform(object):

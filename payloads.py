@@ -30,7 +30,6 @@ class Type(IntEnum):
     Encrypted = 46
 
 
-
 class IkePayload(object):
     _type = None
 
@@ -71,7 +70,6 @@ class IkePayload(object):
 
 
 class SA(IkePayload):
-
     def __init__(self, data=None, proposals=None, next_payload=None,
                  critical=False):
         super(SA, self).__init__(data, next_payload, critical)
@@ -79,13 +77,13 @@ class SA(IkePayload):
             self.parse(data)
         elif proposals is None:
             self.proposals = [
-                Proposal(None, 1, 'IKE', transforms=[
+                Proposal(None, 1, const.ProtocolID.IKE, transforms=[
                     ('ENCR_CAMELLIA_CBC', 256),
                     ('PRF_HMAC_SHA2_256',),
                     ('AUTH_HMAC_SHA2_256_128',),
                     ('DH_GROUP_14',)
                 ]),
-                Proposal(None, 2, 'ESP', transforms=[
+                Proposal(None, 2, const.ProtocolID.ESP, transforms=[
                     ('ENCR_CAMELLIA_CBC', 256),
                     ('ESN', ),
                     ('AUTH_HMAC_SHA2_256_128',)
@@ -115,7 +113,6 @@ class SA(IkePayload):
 
 
 class KE(IkePayload):
-
     def parse(self, data):
         self.group, _ = struct.unpack('!2H', data[4:8])
         self.kex_data = data[const.PAYLOAD_HEADER.size + 4:self.length]
@@ -134,7 +131,6 @@ class KE(IkePayload):
 
 
 class Nonce(IkePayload):
-
     def parse(self, data):
         self._data = data[const.PAYLOAD_HEADER.size:self.length]
 
@@ -154,15 +150,25 @@ class Nonce(IkePayload):
 class Notify(IkePayload):
     def parse(self, data):
         self._data = data[4:self.length]
-        self.protocol_id, self.spi_size, self.message_type = struct.unpack(
+        self.protocol_id, self.spi_size, message_type = struct.unpack(
             '!2BH', data[:4])
         self.spi = data[4:4 + self.spi_size]
-        logger.info(
-            'Notify for {0}: {1} (spi {2} [{3}])'.format(self.protocol_id,
-                                                         self.message_type,
-                                                         binascii.hexlify(self.spi),
-                                                         self.spi_size))
+        self.message_type = const.MessageType(message_type)
+        if self.message_type < 2 ** 14:
+            self.level = logging.ERROR
+        else:
+            self.level = logging.INFO
+        logger.log(self.level, self.__unicode__())
         self.notification_data = data[4 + self.spi_size:self.length]
+
+    def __unicode__(self):
+        if self.protocol_id:
+            return 'Notify payload for {0}: {1!r} (spi {2} [{3}]) [{4}]'.format(
+                const.ProtocolID(self.protocol_id),
+                self.message_type, binascii.hexlify(self.spi),
+                self.spi_size, self.length)
+        else:
+            return 'Notify payload {0!r} [{1}]'.format(self.message_type, self.length)
 
 
 class IDi(IkePayload):

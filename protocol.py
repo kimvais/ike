@@ -3,7 +3,6 @@
 # Copyright © 2014 Kimmo Parviainen-Jalanko.
 #
 from enum import Enum
-
 from functools import reduce
 from hmac import HMAC
 import logging
@@ -12,7 +11,6 @@ import os
 from hashlib import sha256
 from struct import Struct, pack, unpack
 import binascii
-import sys
 
 import payloads
 from util.dump import dump
@@ -30,6 +28,7 @@ MACLEN = 16
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
 
 class State(Enum):
     STARTING = 0
@@ -139,7 +138,7 @@ class IKE(object):
         # Add SA (33)
         #
         self.esp_SPIout = os.urandom(4)
-        prop = proposal.Proposal(protocol='ESP', spi=self.esp_SPIout, last=True, transforms=[
+        prop = proposal.Proposal(protocol=const.ProtocolID.ESP, spi=self.esp_SPIout, last=True, transforms=[
             ('ENCR_CAMELLIA_CBC', 256), ('AUTH_HMAC_SHA2_256_128',)])
         # ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
         plain += PAYLOAD.pack(44, 0, len(prop.data) + 4) + prop.data
