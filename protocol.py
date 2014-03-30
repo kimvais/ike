@@ -128,11 +128,10 @@ class IKE(object):
           self.SK_pi,
           self.SK_pr ) = unpack("32s" * 7, keymat)
 
+        logger.debug("SK_ai: {}".format(dump(self.SK_ai)))
         # Generate auth payload
 
-        message1 = bytearray(self.packets[0].data)
-        logger.debug("Original packet len: %d" % len(message1))
-        signed = message1 + self.Nr + prf(self.SK_pi, IDi)
+        signed = bytearray(self.packets[0].data[IKE_HEADER.size:]) + self.Nr + prf(self.SK_pi, IDi)
         plain += prf(prf(PSK, b"Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]  # AUTH data
 
         # Add SA (33)
@@ -178,7 +177,7 @@ class IKE(object):
             len(enc_payload) + IKE_HEADER.size + MACLEN
         ) + enc_payload
 
-        logger.debug(dump(data))
+        logger.debug("Final data: {}".format(dump(data)))
         # Sign
         ikehash = HMAC(self.SK_ai, digestmod=sha256)
         ikehash.update(data)
