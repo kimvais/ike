@@ -15,7 +15,7 @@ Usage:
     {} <remote_peer>
 """.format(__file__)
 
-from protocol import IKE, parse_packet
+from protocol import IKE, parse_packet, State
 
 
 class IKEInitiator(asyncio.DatagramProtocol):
@@ -36,11 +36,12 @@ class IKEInitiator(asyncio.DatagramProtocol):
         logger.debug("Got responder SPI: {0:x}".format(packet.rSPI))
         self.ike.rSPI = packet.rSPI
         self.ike.packets.append(packet)
-        ike_auth = self.ike.auth()
-        logger.info("Sending AUTH")
-        self.transport.sendto(ike_auth)
-        # self.ike.packets.append(Packet(data=ike_auth))
-        logger.info("IKE AUTH SENT")
+        if self.ike.state == State.INIT:
+            ike_auth = self.ike.auth()
+            logger.info("Sending AUTH")
+            self.transport.sendto(ike_auth)
+            # self.ike.packets.append(Packet(data=ike_auth))
+            logger.info("IKE AUTH SENT")
 
     # Possibly invoked if there is no server listening on the
     # address to which we are sending.

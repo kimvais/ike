@@ -2,6 +2,7 @@
 #
 # Copyright © 2014 Kimmo Parviainen-Jalanko.
 #
+from enum import Enum
 
 from functools import reduce
 from hmac import HMAC
@@ -11,6 +12,7 @@ import os
 from hashlib import sha256
 from struct import Struct, pack, unpack
 import binascii
+import sys
 
 import payloads
 from util.dump import dump
@@ -29,6 +31,11 @@ MACLEN = 16
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+class State(Enum):
+    STARTING = 0
+    INIT = 1
+    AUTH = 2
+
 
 class IKE(object):
     def __init__(self, dh_group=14, nonce_len=32):
@@ -37,6 +44,7 @@ class IKE(object):
         self.diffie_hellman = DiffieHellman(dh_group)
         self.Ni = os.urandom(nonce_len)
         self.packets = list()
+        self.state = State.STARTING
 
     def init(self):
         packet = Packet()
@@ -57,12 +65,14 @@ class IKE(object):
             0,
             (len(packet.data) + const.IKE_HEADER.size)
         ))
+        self.state = State.INIT
         return packet.header + packet.data
 
     def auth(self):
         # self.iSPI = self.packets[0].iSPI
         # self.rSPI = self.packets[-1].rSPI
         self.packets.append(Packet())
+        self.state = State.AUTH
         return self.ike_auth(self)
 
 
@@ -198,9 +208,11 @@ def parse_packet(data, ike=None):
     logger.debug("next payload: {}".format(next_payload))
     if next_payload == 46:
         next_payload, is_critical, payload_len = PAYLOAD.unpack(remainder[:PAYLOAD.size])
+        logger.debug("next payload: {}".format(next_payload))
         try:
-            iv = remainder[PAYLOAD.size:PAYLOAD.size + 16]
-            ciphertext = remainder[PAYLOAD.size + 16:payload_len]  # HMAC size
+            iv_len = 16
+            iv = bytes(remainder[PAYLOAD.size:PAYLOAD.size + iv_len])
+            ciphertext = bytes(remainder[PAYLOAD.size + iv_len:payload_len])  # HMAC size
             hmac_theirs = remainder[-MACLEN:]
         except IndexError:
             logger.critical('Malformed packet')
@@ -213,7 +225,11 @@ def parse_packet(data, ike=None):
         logger.debug('HMAC verify (ours){} (theirs){}'.format(
             binascii.hexlify(hmac_ours), binascii.hexlify(hmac_theirs)))
         assert hmac_ours == hmac_theirs  # TODO: raise IkeError
-        # TODO: Decrypt
+        # Decrypt
+        cipher = Camellia(ike.SK_er, iv=iv)
+        decrypted = cipher.decrypt(ciphertext)
+        logger.debug("Decrypted packet from responder: {}".format(dump(decrypted)))
+        remainder = decrypted
     while next_payload:
         logger.debug('Next payload: {0}'.format(next_payload))
         logger.debug('{0} bytes remaining'.format(len(remainder)))
