@@ -65,6 +65,7 @@ class IKE(object):
             (len(packet.data) + const.IKE_HEADER.size)
         ))
         self.state = State.INIT
+        logger.debug("Message1: {}".format(dump(packet.data)))
         return packet.header + packet.data
 
     def auth(self):
@@ -131,7 +132,8 @@ class IKE(object):
         logger.debug("SK_ai: {}".format(dump(self.SK_ai)))
         # Generate auth payload
 
-        signed = bytearray(self.packets[0].data[IKE_HEADER.size:]) + self.Nr + prf(self.SK_pi, IDi)
+        message1 = self.packets[0].data
+        signed = message1 + self.Nr + prf(self.SK_pi, IDi)
         plain += prf(prf(PSK, b"Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]  # AUTH data
 
         # Add SA (33)

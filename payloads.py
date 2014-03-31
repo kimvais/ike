@@ -12,6 +12,7 @@ import binascii
 
 import const
 from proposal import Proposal
+from util.conv import to_bytes
 
 
 __author__ = 'kimvais'
@@ -125,7 +126,7 @@ class KE(IkePayload):
         if data is not None:
             self.parse(data)
         else:
-            self.kex_data = diffie_hellman.public_key.to_bytes(diffie_hellman.public_key.bit_length(), 'big')
+            self.kex_data = to_bytes(diffie_hellman.public_key)
             self._data = struct.pack('!2H', group, 0) + self.kex_data
             self.length = const.PAYLOAD_HEADER.size + len(self._data)
 
