@@ -24,11 +24,20 @@ logger.setLevel(logging.DEBUG)
 class Type(IntEnum):
     SA = 33
     KE = 34
-    Nonce = 40
-    IDi = 35,
+    IDi = 35
     IDr = 36
+    CERT = 37
+    CERTREQ = 38
+    AUTH = 39
+    Nonce = 40
+    Ni = 40
+    Nr = 40
     Notify = 41
+    TSi = 44
+    TSr = 45
     Encrypted = 46
+    CP = 47
+    EAP = 48
 
 
 class IkePayload(object):
@@ -180,11 +189,21 @@ class IDr(IkePayload):
     pass
 
 
+class AUTH(IkePayload):
+    pass
+
+_map = {x.__name__: x for x in IkePayload.__subclasses__()}
+
+def get_by_type(payload_type):
+    return _map.get(Type(payload_type).name, IkePayload)
+
+
 BY_TYPE = {
     33: SA,
     34: KE,
     35: IDi,
     36: IDr,
     40: Nonce,
+    39: AUTH,
     41: Notify,
 }

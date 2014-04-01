@@ -129,8 +129,8 @@ class IKE(object):
 
         IDi = bytes(plain)[PAYLOAD.size:]
 
-        # authentication_type = const.AuthenticationType.PSK
-        authentication_type = const.AuthenticationType.RSA
+        authentication_type = const.AuthenticationType.PSK
+        # authentication_type = const.AuthenticationType.RSA
         #logger.debug "%r\n%r" % (IDi, plain)
 
         signed = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, IDi)
