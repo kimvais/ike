@@ -38,7 +38,7 @@ class State(Enum):
 
 class IKE(object):
     def __init__(self, dh_group=14, nonce_len=32):
-        self.iSPI = 0
+        self.iSPI = 0  # XXX: Should be generated here and passed downwards
         self.rSPI = 0
         self.diffie_hellman = DiffieHellman(dh_group)
         self.Ni = os.urandom(nonce_len)
@@ -53,6 +53,7 @@ class IKE(object):
                                            diffie_hellman=self.diffie_hellman))
         packet.payloads.append(payloads.Nonce(nonce=self.Ni))
         self.iSPI = packet.payloads[0].spi
+        # XXX: This belongs in Packet()
         packet.data = reduce(operator.add, (x.data for x in packet.payloads))
         packet.header = bytearray(const.IKE_HEADER.pack(
             self.iSPI,
@@ -65,8 +66,7 @@ class IKE(object):
             (len(packet.data) + const.IKE_HEADER.size)
         ))
         self.state = State.INIT
-        logger.debug("Message1: {}".format(dump(packet.data)))
-        return packet.header + packet.data
+        return bytes(packet)
 
     def auth(self):
         # self.iSPI = self.packets[0].iSPI
@@ -132,8 +132,7 @@ class IKE(object):
         logger.debug("SK_ai: {}".format(dump(self.SK_ai)))
         # Generate auth payload
 
-        message1 = self.packets[0].data
-        signed = message1 + self.Nr + prf(self.SK_pi, IDi)
+        signed = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, IDi)
         plain += prf(prf(PSK, b"Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]  # AUTH data
 
         # Add SA (33)
@@ -191,10 +190,13 @@ class IKE(object):
 class Packet(object):
     def __init__(self, data=None, exchange_type=None):
         self.payloads = list()
-        self.data = ''
+        self.data = b''
         self.iSPI = self.rSPI = 0
         self.length = 0
-        self.header = ''
+        self.header = b''
+
+    def __bytes__(self):
+        return bytes(self.header + self.data)
 
 
 def parse_packet(data, ike=None):
