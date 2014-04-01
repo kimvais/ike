@@ -165,3 +165,8 @@ class MessageType(IntEnum):
     def __repr__(self):
         return u"{0:s}: {1!r:s}>".format(self._name_, self._value_)
 
+
+class AuthenticationType(IntEnum):
+    RSA = 1
+    PSK = 2
+    DSS = 3

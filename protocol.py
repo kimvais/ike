@@ -13,6 +13,7 @@ from struct import Struct, pack, unpack
 import binascii
 
 import payloads
+from util import pubkey
 from util.dump import dump
 from util.cipher import Camellia
 import const
@@ -81,7 +82,7 @@ class IKE(object):
         plain = bytearray()
         # Add IDi (35)
         #
-        EMAIL = b"k@77.fi"
+        EMAIL = b"test@77.fi"
         plain += PAYLOAD.pack(39, 0, 8 + len(EMAIL))
         plain += pack("!B3x", 3)  # ID Type (RFC822 address) + reserved
         plain += EMAIL
@@ -89,12 +90,6 @@ class IKE(object):
         # Add AUTH (39)
         #
         PSK = b"foo"
-
-        IDi = bytes(plain)[PAYLOAD.size:]
-
-        plain += PAYLOAD.pack(33, 0, 8 + const.AUTH_MAC_SIZE)  # prf always returns 20 bytes
-        plain += pack("!B3x", 2)  # AUTH Type (psk) + reserved
-        #logger.debug "%r\n%r" % (IDi, plain)
 
         # XXX: This should be parsed when receiving.
         # find Nr
@@ -132,8 +127,20 @@ class IKE(object):
         logger.debug("SK_ai: {}".format(dump(self.SK_ai)))
         # Generate auth payload
 
+        IDi = bytes(plain)[PAYLOAD.size:]
+
+        # authentication_type = const.AuthenticationType.PSK
+        authentication_type = const.AuthenticationType.RSA
+        #logger.debug "%r\n%r" % (IDi, plain)
+
         signed = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, IDi)
-        plain += prf(prf(PSK, b"Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]  # AUTH data
+        if authentication_type == const.AuthenticationType.PSK:
+            authentication_data = prf(prf(PSK, b"Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]
+        elif authentication_type == const.AuthenticationType.RSA:
+            authentication_data = pubkey.sign(signed, 'tests/private_key.pem')
+        plain += PAYLOAD.pack(33, 0, 8 + len(authentication_data))  # prf always returns 20 bytes
+        plain += pack("!B3x", authentication_type)  # AUTH Type (psk) + reserved
+        plain += authentication_data  # AUTH data
 
         # Add SA (33)
         #
