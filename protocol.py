@@ -122,22 +122,24 @@ class IKE(object):
           self.SK_ei,
           self.SK_er,
           self.SK_pi,
-          self.SK_pr ) = unpack("32s" * 7, keymat)
+          self.SK_pr ) = unpack("32s" * 7, keymat)  # XXX: Should support other than 256-bit algorithms, really.
 
         logger.debug("SK_ai: {}".format(dump(self.SK_ai)))
+        logger.debug("SK_ei: {}".format(dump(self.SK_ei)))
         # Generate auth payload
 
         IDi = bytes(plain)[PAYLOAD.size:]
 
-        authentication_type = const.AuthenticationType.PSK
-        # authentication_type = const.AuthenticationType.RSA
+        # authentication_type = const.AuthenticationType.PSK
+        authentication_type = const.AuthenticationType.RSA
         #logger.debug "%r\n%r" % (IDi, plain)
 
         signed = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, IDi)
         if authentication_type == const.AuthenticationType.PSK:
             authentication_data = prf(prf(PSK, b"Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]
         elif authentication_type == const.AuthenticationType.RSA:
-            authentication_data = pubkey.sign(signed, 'tests/private_key.pem')
+            # XXX: StrongSwan can not verify SHA-256 signature, so we have to use SHA-1
+            authentication_data = pubkey.sign(signed, 'tests/private_key.pem', hash_alg='SHA-1')
         plain += PAYLOAD.pack(33, 0, 8 + len(authentication_data))  # prf always returns 20 bytes
         plain += pack("!B3x", authentication_type)  # AUTH Type (psk) + reserved
         plain += authentication_data  # AUTH data
