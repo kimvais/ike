@@ -5,6 +5,7 @@
 from enum import Enum
 from functools import reduce
 from hmac import HMAC
+import ipaddress
 import logging
 import operator
 import os
@@ -38,13 +39,15 @@ class State(Enum):
 
 
 class IKE(object):
-    def __init__(self, dh_group=14, nonce_len=32):
+    def __init__(self, address, peer, dh_group=14, nonce_len=32):
         self.iSPI = 0  # XXX: Should be generated here and passed downwards
         self.rSPI = 0
         self.diffie_hellman = DiffieHellman(dh_group)
         self.Ni = os.urandom(nonce_len)
         self.packets = list()
         self.state = State.STARTING
+        self.address = address
+        self.peer = peer
 
     def init(self):
         packet = Packet()
@@ -55,7 +58,7 @@ class IKE(object):
         packet.payloads.append(payloads.Nonce(nonce=self.Ni))
         self.iSPI = packet.payloads[0].spi
         # XXX: This belongs in Packet()
-        packet.data = reduce(operator.add, (x.data for x in packet.payloads))
+        packet.data = reduce(operator.add, (bytes(x) for x in packet.payloads))
         packet.header = bytearray(const.IKE_HEADER.pack(
             self.iSPI,
             self.rSPI,
@@ -76,24 +79,9 @@ class IKE(object):
         self.state = State.AUTH
         return self.ike_auth(self)
 
-
-    def ike_auth(self, packet):
-
-        plain = bytearray()
-        # Add IDi (35)
-        #
-        EMAIL = b"test@77.fi"
-        plain += PAYLOAD.pack(39, 0, 8 + len(EMAIL))
-        plain += pack("!B3x", 3)  # ID Type (RFC822 address) + reserved
-        plain += EMAIL
-
-        # Add AUTH (39)
-        #
-        PSK = b"foo"
-
-        # XXX: This should be parsed when receiving.
+    def init_response_recv(self):
         # find Nr
-        for p in self.packets[1].payloads:
+        for p in self.packets[-1].payloads:
             if p._type == 40:
                 self.Nr = p._data
                 logger.debug(u"Responder nonce {}".format(binascii.hexlify(self.Nr)))
@@ -126,6 +114,19 @@ class IKE(object):
 
         logger.debug("SK_ai: {}".format(dump(self.SK_ai)))
         logger.debug("SK_ei: {}".format(dump(self.SK_ei)))
+
+    def ike_auth(self, packet):
+
+        plain = bytearray()
+        # Add IDi (35)
+        #
+
+        plain += bytes(payloads.IDi(next_payload='AUTH'))
+
+        # Add AUTH (39)
+        #
+        PSK = b"foo"
+
         # Generate auth payload
 
         IDi = bytes(plain)[PAYLOAD.size:]
@@ -148,20 +149,26 @@ class IKE(object):
         #
         self.esp_SPIout = os.urandom(4)
         prop = proposal.Proposal(protocol=const.ProtocolID.ESP, spi=self.esp_SPIout, last=True, transforms=[
-            ('ENCR_CAMELLIA_CBC', 256), ('AUTH_HMAC_SHA2_256_128',)])
+            ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
         # ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
         plain += PAYLOAD.pack(44, 0, len(prop.data) + 4) + prop.data
 
+        localip = int(ipaddress.IPv4Address(self.address[0]))
+        localport = self.address[1]
+        peerip = int(ipaddress.IPv4Address(self.peer[0]))
+        peerport = self.peer[1]
+
         # Generate traffic selectors
-        ts = pack("!2BH2H2I", 7, 0, 16, 0, 0, 0, 0)  # Propose everything
+        tsi = pack("!2BH2H2I", 7, 0, 16, localport, localport, localip, localip)
+        tsr = pack("!2BH2H2I", 7, 0, 16, peerport, peerport, peerip, peerip)
 
         # Add TSi (44)
-        plain += PAYLOAD.pack(45, 0, 8 + len(ts))  # 12 = Payload header, + B3x + TS header
-        plain += pack("!B3x", 1) + ts  # just a single TS
+        plain += PAYLOAD.pack(45, 0, 8 + len(tsi))  # 12 = Payload header, + B3x + TS header
+        plain += pack("!B3x", 1) + tsi  # just a single TS
 
         # Add TSr (45)
-        plain += PAYLOAD.pack(0, 0, 8 + len(ts))
-        plain += pack("!B3x", 1) + ts  # just a single TS
+        plain += PAYLOAD.pack(0, 0, 8 + len(tsr))
+        plain += pack("!B3x", 1) + tsr  # just a single TS
 
         # Encrypt and hash
         iv = os.urandom(16)

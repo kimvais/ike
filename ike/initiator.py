@@ -19,11 +19,14 @@ from ike.protocol import IKE, parse_packet, State
 
 
 class IKEInitiator(asyncio.DatagramProtocol):
-    def __init__(self):
-        self.ike = IKE()
 
     def connection_made(self, transport):
         self.transport = transport
+        sock = self.transport.get_extra_info("socket")
+        address = sock.getsockname()
+        peer = sock.getpeername()
+        logger.debug("Socket created from {} to {}".format(address, peer))
+        self.ike = IKE(address, peer)
         logger.info("Sending INIT")
         self.transport.sendto(self.ike.init())  # no need for address
 
@@ -33,10 +36,11 @@ class IKEInitiator(asyncio.DatagramProtocol):
         # TODO: Read SPIs and Exchange type and decide what to do based on that instead of
         # doing it like this:
         packet = parse_packet(data=data, ike=self.ike)
-        logger.debug("Got responder SPI: {0:x}".format(packet.rSPI))
-        self.ike.rSPI = packet.rSPI
         self.ike.packets.append(packet)
         if self.ike.state == State.INIT:
+            logger.debug("Got responder SPI: {0:x}".format(packet.rSPI))
+            self.ike.rSPI = packet.rSPI
+            self.ike.init_response_recv()
             ike_auth = self.ike.auth()
             logger.info("Sending AUTH")
             self.transport.sendto(ike_auth)

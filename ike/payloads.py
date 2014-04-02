@@ -12,7 +12,7 @@ import binascii
 
 from .import const
 from .proposal import Proposal
-from util.conv import to_bytes
+from .util.conv import to_bytes
 
 
 __author__ = 'kimvais'
@@ -64,9 +64,8 @@ class IkePayload(object):
                                                    self.flags,
                                                    self.length))
 
-    @property
-    def data(self):
-        return self.header + self._data
+    def __bytes__(self):
+        return bytes(self.header + self._data)
 
     def __unicode__(self):
         return "IKE Payload {0} [{1}]".format(self.__class__.__name__,
@@ -103,14 +102,13 @@ class SA(IkePayload):
             self.proposals = proposals
         self.spi = self.proposals[0].spi
 
-    @property
-    def data(self):
+    def __bytes__(self):
         ret = list()
         self.proposals[-1].last = True
         ret.extend(proposal.data for proposal in self.proposals)
         self.length = 4 + sum((len(x) for x in ret))
         ret.insert(0, self.header)
-        return reduce(operator.add, ret)
+        return bytes(reduce(operator.add, ret))
 
     def parse(self, data):
         self.proposals = list()
@@ -182,7 +180,11 @@ class Notify(IkePayload):
 
 
 class IDi(IkePayload):
-    pass
+        def __init__(self, data=None, next_payload=None, critical=False):
+            super().__init__(data, next_payload, critical)
+            EMAIL = b'test@77.fi'
+            self.length = 8 + len(EMAIL)
+            self._data = struct.pack("!B3x", 3) + EMAIL  # ID Type (RFC822 address) + reserved
 
 
 class IDr(IkePayload):
