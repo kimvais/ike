@@ -11,9 +11,12 @@ import struct
 import binascii
 
 from .import const
+from ike.util import pubkey
+from ike.util.prf import prf
 from .proposal import Proposal
 from .util.conv import to_bytes
 
+PRIVATE_KEY_PEM = 'tests/private_key.pem'
 
 __author__ = 'kimvais'
 
@@ -192,7 +195,26 @@ class IDr(IkePayload):
 
 
 class AUTH(IkePayload):
-    pass
+    def __init__(self, signed_octets=None, data=None, next_payload=None, critical=False):
+        assert signed_octets or data
+        super().__init__(data, next_payload, critical)
+        if not data:
+            # Generate auth payload
+
+            # authentication_type = const.AuthenticationType.PSK
+            authentication_type = const.AuthenticationType.RSA
+
+            if authentication_type == const.AuthenticationType.PSK:
+                PSK = b"foo"
+                authentication_data = prf(prf(PSK, b"Key Pad for IKEv2"), signed_octets)[:const.AUTH_MAC_SIZE]
+            elif authentication_type == const.AuthenticationType.RSA:
+                # XXX: StrongSwan can not verify SHA-256 signature, so we have to use SHA-1
+                authentication_data = pubkey.sign(signed_octets, PRIVATE_KEY_PEM, hash_alg='SHA-1')
+            else:
+                authentication_data = b''
+                raise AssertionError("Unsupported authentication method")
+            self.length = 8 + len(authentication_data)
+            self._data = struct.pack("!B3x", authentication_type) + authentication_data
 
 _map = {x.__name__: x for x in IkePayload.__subclasses__()}
 

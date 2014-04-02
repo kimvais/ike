@@ -52,10 +52,9 @@ class IKE(object):
     def init(self):
         packet = Packet()
         self.packets.append(packet)
-        packet.payloads.append(payloads.SA(next_payload="KE"))
-        packet.payloads.append(payloads.KE(next_payload="Ni",
-                                           diffie_hellman=self.diffie_hellman))
-        packet.payloads.append(payloads.Nonce(nonce=self.Ni))
+        packet.add_payload(payloads.SA())
+        packet.add_payload(payloads.KE(diffie_hellman=self.diffie_hellman))
+        packet.add_payload(payloads.Nonce(nonce=self.Ni))
         packet.iSPI = self.iSPI = packet.payloads[0].spi
         self.state = State.INIT
         return bytes(packet)
@@ -63,9 +62,10 @@ class IKE(object):
     def auth(self):
         # self.iSPI = self.packets[0].iSPI
         # self.rSPI = self.packets[-1].rSPI
-        self.packets.append(Packet())
+        packet = Packet()
+        self.packets.append(packet)
         self.state = State.AUTH
-        return self.ike_auth(self)
+        return self.ike_auth(packet)
 
     def init_response_recv(self):
         # find Nr
@@ -109,36 +109,24 @@ class IKE(object):
         # Add IDi (35)
         #
 
-        plain += bytes(payloads.IDi(next_payload='AUTH'))
+        id_i = payloads.IDi(next_payload='AUTH')
+        packet.add_payload(id_i)
+        plain += bytes(id_i)
 
         # Add AUTH (39)
         #
-        PSK = b"foo"
 
-        # Generate auth payload
-
-        IDi = bytes(plain)[PAYLOAD.size:]
-
-        # authentication_type = const.AuthenticationType.PSK
-        authentication_type = const.AuthenticationType.RSA
-        #logger.debug "%r\n%r" % (IDi, plain)
-
-        signed = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, IDi)
-        if authentication_type == const.AuthenticationType.PSK:
-            authentication_data = prf(prf(PSK, b"Key Pad for IKEv2"), signed)[:const.AUTH_MAC_SIZE]
-        elif authentication_type == const.AuthenticationType.RSA:
-            # XXX: StrongSwan can not verify SHA-256 signature, so we have to use SHA-1
-            authentication_data = pubkey.sign(signed, 'tests/private_key.pem', hash_alg='SHA-1')
-        plain += PAYLOAD.pack(33, 0, 8 + len(authentication_data))  # prf always returns 20 bytes
-        plain += pack("!B3x", authentication_type)  # AUTH Type (psk) + reserved
-        plain += authentication_data  # AUTH data
+        signed_octets = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, id_i._data)
+        auth_payload = payloads.AUTH(signed_octets, next_payload='SA')
+        packet.add_payload(auth_payload)
+        logger.debug("AUTH DATA: {}".format(dump(bytes(auth_payload))))
+        plain += bytes(auth_payload)  # AUTH data
 
         # Add SA (33)
         #
         self.esp_SPIout = os.urandom(4)
         prop = proposal.Proposal(protocol=const.ProtocolID.ESP, spi=self.esp_SPIout, last=True, transforms=[
             ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
-        # ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
         plain += PAYLOAD.pack(44, 0, len(prop.data) + 4) + prop.data
 
         localip = int(ipaddress.IPv4Address(self.address[0]))
@@ -202,6 +190,14 @@ class Packet(object):
         self.length = 0
         self.header = b''
         self.message_id = message_id
+
+    def add_payload(self, payload):
+        """
+        Adds a payload to packet, updating last payload's next_payload field
+        """
+        if self.payloads:
+            self.payloads[-1].next_payload = payload._type
+        self.payloads.append(payload)
 
     def __bytes__(self):
         self.data = reduce(operator.add, (bytes(x) for x in self.payloads))
