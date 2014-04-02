@@ -2,7 +2,7 @@
 #
 # Copyright © 2014 Kimmo Parviainen-Jalanko.
 #
-from enum import Enum
+from enum import IntEnum
 from functools import reduce
 from hmac import HMAC
 import ipaddress
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class State(Enum):
+class State(IntEnum):
     STARTING = 0
     INIT = 1
     AUTH = 2
@@ -56,19 +56,7 @@ class IKE(object):
         packet.payloads.append(payloads.KE(next_payload="Ni",
                                            diffie_hellman=self.diffie_hellman))
         packet.payloads.append(payloads.Nonce(nonce=self.Ni))
-        self.iSPI = packet.payloads[0].spi
-        # XXX: This belongs in Packet()
-        packet.data = reduce(operator.add, (bytes(x) for x in packet.payloads))
-        packet.header = bytearray(const.IKE_HEADER.pack(
-            self.iSPI,
-            self.rSPI,
-            packet.payloads[0]._type,
-            const.IKE_VERSION,
-            const.IKE_SA_INIT,
-            const.IKE_HDR_FLAGS['I'],
-            0,
-            (len(packet.data) + const.IKE_HEADER.size)
-        ))
+        packet.iSPI = self.iSPI = packet.payloads[0].spi
         self.state = State.INIT
         return bytes(packet)
 
@@ -204,15 +192,34 @@ class IKE(object):
 
 
 class Packet(object):
-    def __init__(self, data=None, exchange_type=None):
+    def __init__(self, data=None, exchange_type=None, message_id=0):
         self.payloads = list()
-        self.data = b''
+        if data:
+            self.data = data
+        else:
+            self.data = b''
         self.iSPI = self.rSPI = 0
         self.length = 0
         self.header = b''
+        self.message_id = message_id
 
     def __bytes__(self):
+        self.data = reduce(operator.add, (bytes(x) for x in self.payloads))
+        self.header = bytearray(const.IKE_HEADER.pack(
+            self.iSPI,
+            self.rSPI,
+            self.payloads[0]._type,
+            const.IKE_VERSION,
+            const.IKE_SA_INIT,
+            const.IKE_HDR_FLAGS['I'],
+            self.message_id,
+            (len(self.data) + const.IKE_HEADER.size)
+        ))
         return bytes(self.header + self.data)
+
+
+class IkeError(Exception):
+    pass
 
 
 def parse_packet(data, ike=None):
@@ -222,6 +229,8 @@ def parse_packet(data, ike=None):
     packet.header = data[0:const.IKE_HEADER.size]
     (packet.iSPI, packet.rSPI, next_payload, packet.version, packet.exchange_type, packet.flags,
      packet.message_id, packet.length) = const.IKE_HEADER.unpack(packet.header)
+    if packet.message_id - int(ike.state) != 1:
+        logger.debug("message ID {} at state {}".format(packet.message_id, ike.state))
     remainder = data[const.IKE_HEADER.size:]
     logger.debug("next payload: {}".format(next_payload))
     if next_payload == 46:
@@ -242,7 +251,8 @@ def parse_packet(data, ike=None):
         hmac_ours = hmac.digest()[:MACLEN]
         logger.debug('HMAC verify (ours){} (theirs){}'.format(
             binascii.hexlify(hmac_ours), binascii.hexlify(hmac_theirs)))
-        assert hmac_ours == hmac_theirs  # TODO: raise IkeError
+        if hmac_ours != hmac_theirs:
+            raise IkeError('HMAC verify failed')
         # Decrypt
         cipher = Camellia(ike.SK_er, iv=iv)
         decrypted = cipher.decrypt(ciphertext)
