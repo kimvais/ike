@@ -15,7 +15,7 @@ Usage:
     {} <remote_peer>
 """.format(__file__)
 
-from protocol import IKE, parse_packet, State
+from ike.protocol import IKE, parse_packet, State
 
 
 class IKEInitiator(asyncio.DatagramProtocol):
@@ -53,7 +53,7 @@ def main(peer):
     port = 500
     loop = asyncio.get_event_loop()
     t = asyncio.Task(loop.create_datagram_endpoint(IKEInitiator, remote_addr=(peer, port)))
-    # TODO: Retransmissions should be handled here? IKE() should store it's negotiation state.
+    # TODO: Retransmissions should be handled here?
     loop.run_until_complete(t)
     loop.run_forever()
 

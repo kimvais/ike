@@ -10,8 +10,8 @@ import os
 import struct
 import binascii
 
-import const
-from proposal import Proposal
+from .import const
+from .proposal import Proposal
 from util.conv import to_bytes
 
 

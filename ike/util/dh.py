@@ -6,7 +6,7 @@ import os
 import re
 import logging
 import binascii
-from util.conv import to_bytes
+from .conv import to_bytes
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)

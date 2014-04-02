@@ -12,15 +12,15 @@ from hashlib import sha256
 from struct import Struct, pack, unpack
 import binascii
 
-import payloads
-from util import pubkey
-from util.dump import dump
-from util.cipher import Camellia
-import const
-import proposal
-from util.conv import to_bytes
-from util.dh import DiffieHellman
-from util.prf import prf, prfplus
+from . import payloads
+from .util import pubkey
+from .util.dump import dump
+from .util.cipher import Camellia
+from . import const
+from . import proposal
+from .util.conv import to_bytes
+from .util.dh import DiffieHellman
+from .util.prf import prf, prfplus
 
 
 IKE_HEADER = Struct("!2Q4B2I")

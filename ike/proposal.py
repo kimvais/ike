@@ -9,8 +9,7 @@ import operator
 import struct
 import binascii
 
-import const
-from const import ProtocolID
+from . import const
 
 
 __author__ = 'kimvais'
@@ -20,7 +19,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class Proposal(object):
-    def __init__(self, data=None, num=1, protocol=ProtocolID.IKE, spi=None, spi_len=0,
+    def __init__(self, data=None, num=1, protocol=const.ProtocolID.IKE, spi=None, spi_len=0,
                  last=False, transforms=None):
         if data is not None:
             self.parse(data)
@@ -39,9 +38,9 @@ class Proposal(object):
             else:
                 self.spi_len = spi_len
             if not self.spi_len:
-                if protocol == ProtocolID.IKE:
+                if protocol == const.ProtocolID.IKE:
                     self.spi_len = 8
-                elif protocol in (ProtocolID.ESP, ProtocolID.AH):
+                elif protocol in (const.ProtocolID.ESP, const.ProtocolID.AH):
                     self.spi_len = 4
                 spi_str = os.urandom(self.spi_len)
             if self.spi_len == 8:
