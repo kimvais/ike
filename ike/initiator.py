@@ -27,22 +27,24 @@ class IKEInitiator(asyncio.DatagramProtocol):
         logger.debug("Socket created from {} to {}".format(address, peer))
         self.ike = IKE(address, peer)
         logger.info("Sending INIT")
-        self.transport.sendto(self.ike.init())  # no need for address
+        self.transport.sendto(self.ike.init_send())  # no need for address
 
     def datagram_received(self, data, address):
         from ike.protocol import State
+        from ike.const import ExchangeType
         (host, port) = address
         logger.info("Received %r from %s:%d" % (data, host, port))
-        self.ike.parse_packet(data=data)
-        # TODO: Read SPIs and Exchange type and decide what to do based on that instead of
-        # doing it like this:
-        if self.ike.state == State.INIT:
-            self.ike.init_response_recv()
-            ike_auth = self.ike.auth()
+        packet = self.ike.parse_packet(data=data)
+        logger.info('{} message {}'.format(packet.exchange_type.name, packet.message_id))
+        # TODO: Check that SPIs match
+        if self.ike.state == State.INIT and packet.exchange_type == ExchangeType.IKE_SA_INIT:
+            self.ike.init_recv()
+            ike_auth = self.ike.auth_send()
             logger.info("Sending AUTH")
             self.transport.sendto(ike_auth)
-            # self.ike.packets.append(Packet(data=ike_auth))
             logger.info("IKE AUTH SENT")
+        elif self.ike.state == State.AUTH and packet.exchange_type == ExchangeType.IKE_AUTH:
+            self.ike.auth_recv()
 
     # Possibly invoked if there is no server listening on the
     # address to which we are sending.
@@ -61,8 +63,7 @@ def main(peer):
 
 if __name__ == '__main__':
     opts = docopt.docopt(__doc__)
-    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(path)s:%(lineno)s: %(message)s')
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(name)s.%(funcName)s:[%(lineno)s]: %(message)s')
     logger = logging.getLogger('MAIN')
-    logger.setLevel(logging.DEBUG)
     logger.info("Starting...")
     main(opts['<remote_peer>'])
