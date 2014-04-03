@@ -4,13 +4,14 @@
 #
 from enum import IntEnum
 from functools import reduce
+import ipaddress
 import logging
 import operator
 import os
 import struct
 import binascii
 
-from .import const
+from . import const
 from ike.util import pubkey
 from ike.util.prf import prf
 from .proposal import Proposal
@@ -182,12 +183,36 @@ class Notify(IkePayload):
             return 'Notify payload {0!r} [{1}]'.format(self.message_type, self.length)
 
 
+class _TS(IkePayload):
+    """
+    Single IPv4 address:port
+    """
+    def __init__(self, addr=None, data=None, next_payload=None, critical=False):
+        assert addr or data
+        super().__init__(data, next_payload, critical)
+        if addr:
+            ip = int(ipaddress.IPv4Address(addr[0]))
+            port = addr[1]
+
+            # Generate traffic selector
+            selector = struct.pack("!2BH2H2I", 7, 0, 16, port, port, ip, ip)
+            self._data = struct.pack("!B3x", 1) + selector # just a single TS
+            self.length = len(self._data) + 4
+
+class TSi(_TS):
+    pass
+
+
+class TSr(_TS):
+    pass
+
+
 class IDi(IkePayload):
-        def __init__(self, data=None, next_payload=None, critical=False):
-            super().__init__(data, next_payload, critical)
-            EMAIL = b'test@77.fi'
-            self.length = 8 + len(EMAIL)
-            self._data = struct.pack("!B3x", 3) + EMAIL  # ID Type (RFC822 address) + reserved
+    def __init__(self, data=None, next_payload=None, critical=False):
+        super().__init__(data, next_payload, critical)
+        EMAIL = b'test@77.fi'
+        self.length = 8 + len(EMAIL)
+        self._data = struct.pack("!B3x", 3) + EMAIL  # ID Type (RFC822 address) + reserved
 
 
 class IDr(IkePayload):
@@ -216,18 +241,15 @@ class AUTH(IkePayload):
             self.length = 8 + len(authentication_data)
             self._data = struct.pack("!B3x", authentication_type) + authentication_data
 
-_map = {x.__name__: x for x in IkePayload.__subclasses__()}
+
+# Register payloads in order to be used for get_by_type()
+_payload_classes = IkePayload.__subclasses__() + _TS.__subclasses__()
+_payload_map = {x.__name__: x for x in _payload_classes if not x.__name__.startswith('_')}
+
 
 def get_by_type(payload_type):
-    return _map.get(Type(payload_type).name, IkePayload)
+    """
+    Returns an IkePayload (sub)class based on the RFC5996 payload_type
+    """
+    return _payload_map.get(Type(payload_type).name, IkePayload)
 
-
-BY_TYPE = {
-    33: SA,
-    34: KE,
-    35: IDi,
-    36: IDr,
-    40: Nonce,
-    39: AUTH,
-    41: Notify,
-}

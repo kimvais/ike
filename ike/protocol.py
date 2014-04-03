@@ -109,14 +109,14 @@ class IKE(object):
         # Add IDi (35)
         #
 
-        id_i = payloads.IDi(next_payload='AUTH')
-        packet.add_payload(id_i)
-        plain += bytes(id_i)
+        id_payload = payloads.IDi(next_payload='AUTH')
+        packet.add_payload(id_payload)
+        plain += bytes(id_payload)
 
         # Add AUTH (39)
         #
 
-        signed_octets = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, id_i._data)
+        signed_octets = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, id_payload._data)
         auth_payload = payloads.AUTH(signed_octets, next_payload='SA')
         packet.add_payload(auth_payload)
         logger.debug("AUTH DATA: {}".format(dump(bytes(auth_payload))))
@@ -129,22 +129,15 @@ class IKE(object):
             ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
         plain += PAYLOAD.pack(44, 0, len(prop.data) + 4) + prop.data
 
-        localip = int(ipaddress.IPv4Address(self.address[0]))
-        localport = self.address[1]
-        peerip = int(ipaddress.IPv4Address(self.peer[0]))
-        peerport = self.peer[1]
-
-        # Generate traffic selectors
-        tsi = pack("!2BH2H2I", 7, 0, 16, localport, localport, localip, localip)
-        tsr = pack("!2BH2H2I", 7, 0, 16, peerport, peerport, peerip, peerip)
-
         # Add TSi (44)
-        plain += PAYLOAD.pack(45, 0, 8 + len(tsi))  # 12 = Payload header, + B3x + TS header
-        plain += pack("!B3x", 1) + tsi  # just a single TS
+        ts_i = payloads.TSi(addr=self.address, next_payload='TSr')
+        packet.add_payload(ts_i)
+        plain += bytes(ts_i)
 
         # Add TSr (45)
-        plain += PAYLOAD.pack(0, 0, 8 + len(tsr))
-        plain += pack("!B3x", 1) + tsr  # just a single TS
+        ts_r = payloads.TSr(addr=self.peer)
+        packet.add_payload(ts_r)
+        plain += bytes(ts_r)
 
         # Encrypt and hash
         iv = os.urandom(16)
@@ -258,7 +251,7 @@ def parse_packet(data, ike=None):
         logger.debug('Next payload: {0}'.format(next_payload))
         logger.debug('{0} bytes remaining'.format(len(remainder)))
         try:
-            payload = payloads.BY_TYPE[next_payload](data=remainder)
+            payload = payloads.get_by_type(next_payload)(data=remainder)
         except KeyError as e:
             logger.error("Unidentified payload {}".format(e))
             payload = payloads.IkePayload(data=remainder)
