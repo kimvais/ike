@@ -17,10 +17,11 @@ IKE_VERSION = (2 << 4 | 0)  # Major << 4 | Minor
 # iSPI, rSPI, NextPayload, (MjVer, MnVer), ExchangeType, Flags, MessageID, Len
 IKE_HEADER = struct.Struct('!2Q4B2L')
 
-IKE_SA_INIT = 34
-IKE_AUTH = 35
-CREATE_CHILD_SA = 36
-INFORMATIONAL = 37
+class ExchangeType(IntEnum):
+    IKE_SA_INIT = 34
+    IKE_AUTH = 35
+    CREATE_CHILD_SA = 36
+    INFORMATIONAL = 37
 
 IKE_HDR_FLAGS = dict(
     R=0b00100000,
@@ -29,24 +30,6 @@ IKE_HDR_FLAGS = dict(
 
 PAYLOAD_HEADER = struct.Struct(
     '!2BH')  # Next Payload, Flags (Critical bit), Len
-
-PAYLOAD_TYPES = dict(
-    SA=33,  # Security Association
-    KE=34,  # Key Exchange
-    IDi=35,  # Initiator identification
-    IDr=36,  # Responder identification
-    CERT=37,  # Certificate
-    CERTREQ=38,  # Certificate request
-    AUTH=39,  # Authentication
-    Ni=40,  # Nonce (initiator)
-    Nr=40,  # Nonce (responder)
-    N=41,  # Notify
-    D=42,  # Delete
-    TSi=44,  # Traffic selector - Initiator
-    TSr=45,  # Traffic selector - Responder
-    SK=46,  # Encrypted and authenticated
-)
-PAYLOAD_TYPES[None] = 0
 
 PROPOSAL_STRUCT = struct.Struct('!2BH4B')
 # Last(0) or 2, Reserved, Proposal Length, Num, Protocol ID, SPI Size, Num transforms

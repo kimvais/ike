@@ -136,7 +136,7 @@ class IKE(object):
 
     def ike_auth(self, packet):
         # Add IDi (35)
-        id_payload = payloads.IDi(next_payload='AUTH')
+        id_payload = payloads.IDi()
         packet.add_payload(id_payload)
 
         # Add AUTH (39)
@@ -190,7 +190,7 @@ class Packet(object):
             self.rSPI,
             self.payloads[0]._type,
             const.IKE_VERSION,
-            const.IKE_SA_INIT,
+            const.ExchangeType.IKE_SA_INIT,
             const.IKE_HDR_FLAGS['I'],
             self.message_id,
             (len(self.data) + const.IKE_HEADER.size)

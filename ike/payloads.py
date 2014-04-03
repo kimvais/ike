@@ -26,6 +26,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class Type(IntEnum):
+    no_next_payload = 0
     SA = 33
     KE = 34
     IDi = 35
@@ -37,6 +38,7 @@ class Type(IntEnum):
     Ni = 40
     Nr = 40
     Notify = 41
+    Delete = 42
     TSi = 44
     TSr = 45
     Encrypted = 46
@@ -47,14 +49,14 @@ class Type(IntEnum):
 class IkePayload(object):
     _type = None
 
-    def __init__(self, data=None, next_payload=None, critical=False):
+    def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False):
         self._type = Type[self.__class__.__name__]
         if data is not None:
             self.next_payload, self.flags, self.length = const.PAYLOAD_HEADER.unpack(
                 data[:const.PAYLOAD_HEADER.size])
             self.parse(data[const.PAYLOAD_HEADER.size:])
         else:
-            self.next_payload = const.PAYLOAD_TYPES[next_payload]
+            self.next_payload = next_payload
             self.length = 0
             self._data = bytearray()
             if critical:
@@ -83,7 +85,7 @@ class IkePayload(object):
 
 
 class SA(IkePayload):
-    def __init__(self, data=None, proposals=None, next_payload=None,
+    def __init__(self, data=None, proposals=None, next_payload=Type.no_next_payload,
                  critical=False):
         super(SA, self).__init__(data, next_payload, critical)
         if data is not None:
@@ -131,7 +133,7 @@ class KE(IkePayload):
         logger.debug("group {}".format(self.group))
         logger.debug('KEX data: {}'.format(binascii.hexlify(self.kex_data)))
 
-    def __init__(self, data=None, next_payload=None, critical=False,
+    def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False,
                  group=14, diffie_hellman=None):
         super(KE, self).__init__(data, next_payload, critical)
         if data is not None:
@@ -146,7 +148,7 @@ class Nonce(IkePayload):
     def parse(self, data):
         self._data = data[const.PAYLOAD_HEADER.size:self.length]
 
-    def __init__(self, data=None, next_payload=None, critical=False,
+    def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False,
                  nonce=None):
         super(Nonce, self).__init__(data, next_payload, critical)
         if data is not None:
@@ -160,7 +162,7 @@ class Nonce(IkePayload):
 
 
 class Notify(IkePayload):
-    def __init__(self, notify_type=None, data=None, next_payload=None, critical=False):
+    def __init__(self, notify_type=None, data=None, next_payload=Type.no_next_payload, critical=False):
         # TODO; Implement generation of notifications with data
         assert notify_type or data
         super().__init__(data, next_payload, critical)
@@ -195,7 +197,7 @@ class _TS(IkePayload):
     """
     Single IPv4 address:port
     """
-    def __init__(self, addr=None, data=None, next_payload=None, critical=False):
+    def __init__(self, addr=None, data=None, next_payload=Type.no_next_payload, critical=False):
         assert addr or data
         super().__init__(data, next_payload, critical)
         if addr:
@@ -216,7 +218,7 @@ class TSr(_TS):
 
 
 class IDi(IkePayload):
-    def __init__(self, data=None, next_payload=None, critical=False):
+    def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False):
         super().__init__(data, next_payload, critical)
         EMAIL = b'test@77.fi'
         self.length = 8 + len(EMAIL)
@@ -228,7 +230,7 @@ class IDr(IkePayload):
 
 
 class AUTH(IkePayload):
-    def __init__(self, signed_octets=None, data=None, next_payload=None, critical=False):
+    def __init__(self, signed_octets=None, data=None, next_payload=Type.no_next_payload, critical=False):
         assert signed_octets or data
         super().__init__(data, next_payload, critical)
         if not data:
