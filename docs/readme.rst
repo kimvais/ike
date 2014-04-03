@@ -1,5 +1,5 @@
-pyike
-=====
+About ike
+=========
 
 The goal of this project is to be a minimalistic IKEv2 (RFC 5996)
 implementation in Python.

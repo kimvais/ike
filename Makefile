@@ -5,6 +5,7 @@ doc:
 	cp README.rst docs/readme.rst
 	sphinx-apidoc -o docs/ ike
 	sphinx-build docs docs/_build
+	git add docs/*.rst
 
 clean:
 	rm -rf __pycache__ build dist README.rst || true
