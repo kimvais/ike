@@ -41,6 +41,10 @@ class Type(IntEnum):
     TSi = 44
     TSr = 45
     SK = 46
+
+    def __repr__(self, *args, **kwargs):
+        return '<{}: {}>'.format(self.name, self.value)
+
     CP = 47
     EAP = 48
 
@@ -51,8 +55,9 @@ class IkePayload(object):
     def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False):
         self._type = Type[self.__class__.__name__]
         if data is not None:
-            self.next_payload, self.flags, self.length = const.PAYLOAD_HEADER.unpack(
+            next_payload, self.flags, self.length = const.PAYLOAD_HEADER.unpack(
                 data[:const.PAYLOAD_HEADER.size])
+            self.next_payload = Type(next_payload)
             self.parse(data[const.PAYLOAD_HEADER.size:])
         else:
             self.next_payload = next_payload
@@ -73,11 +78,11 @@ class IkePayload(object):
         return bytes(self.header + self._data)
 
     def __unicode__(self):
-        return "IKE Payload {0} [{1}]".format(self.__class__.__name__,
+        return "IKE Payload {0!r} [{1}]".format(self._type,
                                               self.length)
 
     def __repr__(self):
-        return '<{0} at {1}>'.format(self.__unicode__(), hex(id(self)))
+        return '<{0}>'.format(self.__unicode__(), hex(id(self)))
 
     def parse(self, data):
         self._data = data
