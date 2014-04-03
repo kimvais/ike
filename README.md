@@ -13,12 +13,16 @@ adhere to any standards required of a security software. Use at own risk. Or pre
   successor)
 - Use strongest algorithms possible.
 
+## Documentation
+You can read the Documentation at https://ike.readthedocs.org
+
 ### What this project is *NOT* going to be
 - ISAKMP (IKEv1) RFC 2409 compliant
 - IPSec data plane / ESP protocol
 
 ## License
 * MIT License
+
 
 ## References
 * http://tools.ietf.org/html/draft-kivinen-ipsecme-ikev2-rfc5996bis-02

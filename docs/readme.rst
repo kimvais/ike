@@ -20,6 +20,11 @@ Design principles
    (RFC 5996 successor)
 -  Use strongest algorithms possible.
 
+Documentation
+-------------
+
+You can read the Documentation at https://ike.readthedocs.org
+
 What this project is *NOT* going to be
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
