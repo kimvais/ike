@@ -160,6 +160,14 @@ class Nonce(IkePayload):
 
 
 class Notify(IkePayload):
+    def __init__(self, notify_type=None, data=None, next_payload=None, critical=False):
+        # TODO; Implement generation of notifications with data
+        assert notify_type or data
+        super().__init__(data, next_payload, critical)
+        if notify_type:
+            self._data = struct.pack('!2BH', 0, 0, notify_type)
+            self.length = 8
+
     def parse(self, data):
         self._data = data[4:self.length]
         self.protocol_id, self.spi_size, message_type = struct.unpack(

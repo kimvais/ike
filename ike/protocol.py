@@ -135,7 +135,6 @@ class IKE(object):
         return data + mac
 
     def ike_auth(self, packet):
-
         # Add IDi (35)
         id_payload = payloads.IDi(next_payload='AUTH')
         packet.add_payload(id_payload)
@@ -157,6 +156,9 @@ class IKE(object):
 
         # Add TSr (45)
         packet.add_payload(payloads.TSr(addr=self.peer))
+
+        # Add N(INITIAL_CONTACT)
+        packet.add_payload(payloads.Notify(notify_type=const.MessageType.INITIAL_CONTACT))
 
         return self.encrypt_and_hmac(packet)
 
