@@ -9,7 +9,7 @@ import logging
 import operator
 import os
 from hashlib import sha256
-from struct import Struct, unpack
+from struct import unpack
 import binascii
 
 from . import payloads
@@ -48,7 +48,7 @@ class IKE(object):
         self.address = address
         self.peer = peer
 
-    def init(self):
+    def init_send(self):
         packet = Packet()
         self.packets.append(packet)
         packet.add_payload(payloads.SA())
@@ -58,15 +58,40 @@ class IKE(object):
         self.state = State.INIT
         return bytes(packet)
 
-    def auth(self):
-        # self.iSPI = self.packets[0].iSPI
-        # self.rSPI = self.packets[-1].rSPI
-        packet = Packet()
+    def auth_send(self):
+        packet = Packet(exchange_type=const.ExchangeType.IKE_AUTH, iSPI=self.iSPI, rSPI=self.rSPI)
+
+        # Add IDi (35)
+        id_payload = payloads.IDi()
+        packet.add_payload(id_payload)
+
+        # Add AUTH (39)
+        signed_octets = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, id_payload._data)
+        packet.add_payload(payloads.AUTH(signed_octets))
+
+        # Add SA (33)
+        self.esp_SPIout = os.urandom(4)
+        packet.add_payload(payloads.SA(proposals=[
+            proposal.Proposal(protocol=const.ProtocolID.ESP, spi=self.esp_SPIout, last=True, transforms=[
+                ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)
+            ])
+        ]))
+
+        # Add TSi (44)
+        packet.add_payload(payloads.TSi(addr=self.address))
+
+        # Add TSr (45)
+        packet.add_payload(payloads.TSr(addr=self.peer))
+
+        # Add N(INITIAL_CONTACT)
+        packet.add_payload(payloads.Notify(notify_type=const.MessageType.INITIAL_CONTACT))
+
         self.packets.append(packet)
         self.state = State.AUTH
-        return self.ike_auth(packet)
 
-    def init_response_recv(self):
+        return self.encrypt_and_hmac(packet)
+
+    def init_recv(self):
         # find Nr
         for p in self.packets[-1].payloads:
             if p._type == 40:
@@ -104,7 +129,12 @@ class IKE(object):
         logger.debug("SK_ai: {}".format(dump(self.SK_ai)))
         logger.debug("SK_ei: {}".format(dump(self.SK_ei)))
 
+    def auth_recv(self):
+        # TODO: Verify
+        pass
+
     def encrypt_and_hmac(self, packet):
+        final = Packet(exchange_type=packet.exchange_type, iSPI=packet.iSPI, rSPI=packet.rSPI, message_id=1)
         # Encrypt and hash
         plain = bytes(packet)[const.IKE_HEADER.size:]
         iv = os.urandom(16)
@@ -128,47 +158,27 @@ class IKE(object):
         ) + enc_payload
         logger.debug("Final data: {}".format(dump(data)))
         # Sign
+        #logger.debug("HMAC: {}".format(dump(mac)))
+        sk = payloads.SK(next_payload=packet.payloads[0]._type, iv=iv, ciphertext=ciphertext)
+        final.add_payload(sk)
+        logger.debug(dump(bytes(final)))
         ikehash = HMAC(self.SK_ai, digestmod=sha256)
-        ikehash.update(data)
+        #ikehash.update(data)
+        ikehash.update(bytes(final)[:-MACLEN])
         mac = ikehash.digest()[:MACLEN]
-        logger.debug("HMAC: {}".format(dump(mac)))
-        return data + mac
+        sk.mac(mac)
 
-    def ike_auth(self, packet):
-        # Add IDi (35)
-        id_payload = payloads.IDi()
-        packet.add_payload(id_payload)
-
-        # Add AUTH (39)
-        signed_octets = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, id_payload._data)
-        packet.add_payload(payloads.AUTH(signed_octets))
-
-        # Add SA (33)
-        self.esp_SPIout = os.urandom(4)
-        packet.add_payload(payloads.SA(proposals=[
-            proposal.Proposal(protocol=const.ProtocolID.ESP, spi=self.esp_SPIout, last=True, transforms=[
-                ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)
-            ])
-        ]))
-
-        # Add TSi (44)
-        packet.add_payload(payloads.TSi(addr=self.address))
-
-        # Add TSr (45)
-        packet.add_payload(payloads.TSr(addr=self.peer))
-
-        # Add N(INITIAL_CONTACT)
-        packet.add_payload(payloads.Notify(notify_type=const.MessageType.INITIAL_CONTACT))
-
-        return self.encrypt_and_hmac(packet)
+        logger.debug(dump(bytes(final)))
+        return bytes(final)
 
     def parse_packet(self, data):
         raw_data = data
         packet = Packet()
         data = bytearray(raw_data)
         packet.header = data[0:const.IKE_HEADER.size]
-        (packet.iSPI, packet.rSPI, next_payload, packet.version, packet.exchange_type, packet.flags,
+        (packet.iSPI, packet.rSPI, next_payload, packet.version, exchange_type, packet.flags,
          packet.message_id, packet.length) = const.IKE_HEADER.unpack(packet.header)
+        packet.exchange_type = const.ExchangeType(exchange_type)
         if self.iSPI != packet.iSPI:
             raise IkeError("Packet to an unknown IKE SA")
         elif not self.rSPI:
@@ -222,16 +232,20 @@ class IKE(object):
 
 
 class Packet(object):
-    def __init__(self, data=None, exchange_type=None, message_id=0):
+    def __init__(self, data=None, exchange_type=None, message_id=0, iSPI=0, rSPI=0):
+        if exchange_type is None:
+            exchange_type=const.ExchangeType.IKE_SA_INIT
         self.payloads = list()
         if data:
             self.data = data
         else:
             self.data = b''
-        self.iSPI = self.rSPI = 0
+        self.iSPI = iSPI
+        self.rSPI = rSPI
         self.length = 0
         self.header = b''
         self.message_id = message_id
+        self.exchange_type = exchange_type
 
     def add_payload(self, payload):
         """
@@ -243,15 +257,16 @@ class Packet(object):
 
     def __bytes__(self):
         self.data = reduce(operator.add, (bytes(x) for x in self.payloads))
+        length = len(self.data) + const.IKE_HEADER.size
         self.header = bytearray(const.IKE_HEADER.pack(
             self.iSPI,
             self.rSPI,
             self.payloads[0]._type,
             const.IKE_VERSION,
-            const.ExchangeType.IKE_SA_INIT,
+            self.exchange_type,
             const.IKE_HDR_FLAGS['I'],
             self.message_id,
-            (len(self.data) + const.IKE_HEADER.size)
+            length
         ))
         return bytes(self.header + self.data)
 

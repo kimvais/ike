@@ -22,7 +22,6 @@ PRIVATE_KEY_PEM = 'tests/private_key.pem'
 __author__ = 'kimvais'
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 class Type(IntEnum):
@@ -41,7 +40,7 @@ class Type(IntEnum):
     Delete = 42
     TSi = 44
     TSr = 45
-    Encrypted = 46
+    SK = 46
     CP = 47
     EAP = 48
 
@@ -185,12 +184,12 @@ class Notify(IkePayload):
 
     def __unicode__(self):
         if self.protocol_id:
-            return 'Notify payload for {0}: {1!r} (spi {2} [{3}]) [{4}]'.format(
+            return '<Notify payload for {0}: {1!r} (spi {2} [{3}]) [{4}]>'.format(
                 const.ProtocolID(self.protocol_id),
                 self.message_type, binascii.hexlify(self.spi),
                 self.spi_size, self.length)
         else:
-            return 'Notify payload {0!r} [{1}]'.format(self.message_type, self.length)
+            return '<Notify payload {0!r} [{1}]>'.format(self.message_type, self.length)
 
 
 class _TS(IkePayload):
@@ -250,6 +249,20 @@ class AUTH(IkePayload):
                 raise AssertionError("Unsupported authentication method")
             self.length = 8 + len(authentication_data)
             self._data = struct.pack("!B3x", authentication_type) + authentication_data
+
+
+class SK(IkePayload):
+    def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False, iv=None, ciphertext=None):
+        assert data or (iv and ciphertext)
+        super().__init__(data, next_payload, critical)
+        if not data:
+            self.iv = iv
+            self.ciphertext = ciphertext
+            self.length = len(iv) + len(ciphertext) + const.PAYLOAD_HEADER.size + 16 # MACLEN
+            self._data = self.iv + self.ciphertext + b'\x00' * 16
+
+    def mac(self, hmac):
+        self._data = self._data[:-16] + hmac
 
 
 # Register payloads in order to be used for get_by_type()
