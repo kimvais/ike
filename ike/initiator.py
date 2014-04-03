@@ -15,12 +15,11 @@ Usage:
     {} <remote_peer>
 """.format(__file__)
 
-from ike.protocol import IKE, State
-
 
 class IKEInitiator(asyncio.DatagramProtocol):
 
     def connection_made(self, transport):
+        from ike.protocol import IKE
         self.transport = transport
         sock = self.transport.get_extra_info("socket")
         address = sock.getsockname()
@@ -31,6 +30,7 @@ class IKEInitiator(asyncio.DatagramProtocol):
         self.transport.sendto(self.ike.init())  # no need for address
 
     def datagram_received(self, data, address):
+        from ike.protocol import State
         (host, port) = address
         logger.info("Received %r from %s:%d" % (data, host, port))
         self.ike.parse_packet(data=data)
@@ -61,7 +61,7 @@ def main(peer):
 
 if __name__ == '__main__':
     opts = docopt.docopt(__doc__)
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(path)s:%(lineno)s: %(message)s')
     logger = logging.getLogger('MAIN')
     logger.setLevel(logging.DEBUG)
     logger.info("Starting...")

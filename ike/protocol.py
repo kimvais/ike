@@ -25,7 +25,6 @@ from .util.prf import prf, prfplus
 MACLEN = 16
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 class State(IntEnum):
@@ -179,6 +178,7 @@ class IKE(object):
             logger.debug("message ID {} at state {}".format(packet.message_id, self.state))
         remainder = data[const.IKE_HEADER.size:]
         logger.debug("next payload: {}".format(next_payload))
+        # TODO: Decryption should be a separate method.
         if next_payload == 46:
             next_payload, is_critical, payload_len = const.PAYLOAD_HEADER.unpack(remainder[:const.PAYLOAD_HEADER.size])
             logger.debug("next payload: {}".format(next_payload))
