@@ -156,10 +156,36 @@ class IKE(object):
         logger.debug(dump(bytes(final)))
         return bytes(final)
 
+    def decrypt(self, data):
+        next_payload, is_critical, payload_len = const.PAYLOAD_HEADER.unpack(data[:const.PAYLOAD_HEADER.size])
+        next_payload = payloads.Type(next_payload)
+        logger.debug("next payload: {!r}".format(next_payload))
+        try:
+            iv_len = 16
+            iv = bytes(data[const.PAYLOAD_HEADER.size:const.PAYLOAD_HEADER.size + iv_len])
+            ciphertext = bytes(data[const.PAYLOAD_HEADER.size + iv_len:payload_len])  # HMAC size
+        except IndexError:
+            raise IkeError('Unable to decrypt: Malformed packet')
+        logger.debug('IV: {}'.format(dump(iv)))
+        logger.debug('CIPHERTEXT: {}'.format(dump(ciphertext)))
+        # Decrypt
+        cipher = Camellia(self.SK_er, iv=iv)
+        decrypted = cipher.decrypt(ciphertext)
+        logger.debug("Decrypted packet from responder: {}".format(dump(decrypted)))
+        return next_payload, decrypted
+
+    def verify_hmac(self, data):
+        hmac = HMAC(self.SK_ar, digestmod=sha256)
+        hmac_theirs = data[-MACLEN:]
+        hmac.update(data[:-MACLEN])
+        hmac_ours = hmac.digest()[:MACLEN]
+        logger.debug('HMAC verify (ours){} (theirs){}'.format(
+            binascii.hexlify(hmac_ours), binascii.hexlify(hmac_theirs)))
+        if hmac_ours != hmac_theirs:
+            raise IkeError('HMAC verify failed')
+
     def parse_packet(self, data):
-        raw_data = data
         packet = Packet()
-        data = bytearray(raw_data)
         packet.header = data[0:const.IKE_HEADER.size]
         (packet.iSPI, packet.rSPI, next_payload, packet.version, exchange_type, packet.flags,
          packet.message_id, packet.length) = const.IKE_HEADER.unpack(packet.header)
@@ -170,47 +196,25 @@ class IKE(object):
             logger.debug("Setting responder SPI: {0:x}".format(packet.rSPI))
             self.rSPI = packet.rSPI
         if packet.message_id - int(self.state) != 1:
-            logger.debug("message ID {} at state {}".format(packet.message_id, self.state))
-        remainder = data[const.IKE_HEADER.size:]
-        logger.debug("next payload: {}".format(next_payload))
-        # TODO: Decryption should be a separate method.
+            logger.debug("message ID {} at state {!r}".format(packet.message_id, self.state))
+        logger.debug("next payload: {!r}".format(next_payload))
         if next_payload == 46:
-            next_payload, is_critical, payload_len = const.PAYLOAD_HEADER.unpack(remainder[:const.PAYLOAD_HEADER.size])
-            logger.debug("next payload: {}".format(next_payload))
-            try:
-                iv_len = 16
-                iv = bytes(remainder[const.PAYLOAD_HEADER.size:const.PAYLOAD_HEADER.size + iv_len])
-                ciphertext = bytes(remainder[const.PAYLOAD_HEADER.size + iv_len:payload_len])  # HMAC size
-                hmac_theirs = remainder[-MACLEN:]
-            except IndexError:
-                logger.critical('Malformed packet')
-
-            logger.debug('IV: {}'.format(dump(iv)))
-            logger.debug('CIPHERTEXT: {}'.format(dump(ciphertext)))
-            hmac = HMAC(self.SK_ar, digestmod=sha256)
-            hmac.update(raw_data[:-MACLEN])
-            hmac_ours = hmac.digest()[:MACLEN]
-            logger.debug('HMAC verify (ours){} (theirs){}'.format(
-                binascii.hexlify(hmac_ours), binascii.hexlify(hmac_theirs)))
-            if hmac_ours != hmac_theirs:
-                raise IkeError('HMAC verify failed')
-            # Decrypt
-            cipher = Camellia(self.SK_er, iv=iv)
-            decrypted = cipher.decrypt(ciphertext)
-            logger.debug("Decrypted packet from responder: {}".format(dump(decrypted)))
-            remainder = decrypted
+            self.verify_hmac(data)
+            next_payload, data = self.decrypt(data[const.IKE_HEADER.size:])
+        else:
+            data = data[const.IKE_HEADER.size:]
         while next_payload:
-            logger.debug('Next payload: {0}'.format(next_payload))
-            logger.debug('{0} bytes remaining'.format(len(remainder)))
+            logger.debug('Next payload: {0!r}'.format(next_payload))
+            logger.debug('{0} bytes remaining'.format(len(data)))
             try:
-                payload = payloads.get_by_type(next_payload)(data=remainder)
+                payload = payloads.get_by_type(next_payload)(data=data)
             except KeyError as e:
                 logger.error("Unidentified payload {}".format(e))
-                payload = payloads.IkePayload(data=remainder)
+                payload = payloads.IkePayload(data=data)
             packet.payloads.append(payload)
             logger.debug('Payloads: {0!r}'.format(packet.payloads))
             next_payload = payload.next_payload
-            remainder = remainder[payload.length:]
+            data = data[payload.length:]
         logger.debug("Packed parsed successfully")
         self.packets.append(packet)
         return packet
