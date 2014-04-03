@@ -15,7 +15,7 @@ Usage:
     {} <remote_peer>
 """.format(__file__)
 
-from ike.protocol import IKE, parse_packet, State
+from ike.protocol import IKE, State
 
 
 class IKEInitiator(asyncio.DatagramProtocol):
@@ -33,13 +33,10 @@ class IKEInitiator(asyncio.DatagramProtocol):
     def datagram_received(self, data, address):
         (host, port) = address
         logger.info("Received %r from %s:%d" % (data, host, port))
+        self.ike.parse_packet(data=data)
         # TODO: Read SPIs and Exchange type and decide what to do based on that instead of
         # doing it like this:
-        packet = parse_packet(data=data, ike=self.ike)
-        self.ike.packets.append(packet)
         if self.ike.state == State.INIT:
-            logger.debug("Got responder SPI: {0:x}".format(packet.rSPI))
-            self.ike.rSPI = packet.rSPI
             self.ike.init_response_recv()
             ike_auth = self.ike.auth()
             logger.info("Sending AUTH")
