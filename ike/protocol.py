@@ -5,16 +5,14 @@
 from enum import IntEnum
 from functools import reduce
 from hmac import HMAC
-import ipaddress
 import logging
 import operator
 import os
 from hashlib import sha256
-from struct import Struct, pack, unpack
+from struct import Struct, unpack
 import binascii
 
 from . import payloads
-from .util import pubkey
 from .util.dump import dump
 from .util.cipher import Camellia
 from . import const
@@ -24,7 +22,6 @@ from .util.dh import DiffieHellman
 from .util.prf import prf, prfplus
 
 
-IKE_HEADER = Struct("!2Q4B2I")
 PAYLOAD = Struct("!2BH")
 MACLEN = 16
 
@@ -36,6 +33,10 @@ class State(IntEnum):
     STARTING = 0
     INIT = 1
     AUTH = 2
+
+
+class IkeError(Exception):
+    pass
 
 
 class IKE(object):
@@ -103,56 +104,19 @@ class IKE(object):
         logger.debug("SK_ai: {}".format(dump(self.SK_ai)))
         logger.debug("SK_ei: {}".format(dump(self.SK_ei)))
 
-    def ike_auth(self, packet):
-
-        plain = bytearray()
-        # Add IDi (35)
-        #
-
-        id_payload = payloads.IDi(next_payload='AUTH')
-        packet.add_payload(id_payload)
-        plain += bytes(id_payload)
-
-        # Add AUTH (39)
-        #
-
-        signed_octets = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, id_payload._data)
-        auth_payload = payloads.AUTH(signed_octets, next_payload='SA')
-        packet.add_payload(auth_payload)
-        logger.debug("AUTH DATA: {}".format(dump(bytes(auth_payload))))
-        plain += bytes(auth_payload)  # AUTH data
-
-        # Add SA (33)
-        #
-        self.esp_SPIout = os.urandom(4)
-        prop = proposal.Proposal(protocol=const.ProtocolID.ESP, spi=self.esp_SPIout, last=True, transforms=[
-            ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)])
-        plain += PAYLOAD.pack(44, 0, len(prop.data) + 4) + prop.data
-
-        # Add TSi (44)
-        ts_i = payloads.TSi(addr=self.address, next_payload='TSr')
-        packet.add_payload(ts_i)
-        plain += bytes(ts_i)
-
-        # Add TSr (45)
-        ts_r = payloads.TSr(addr=self.peer)
-        packet.add_payload(ts_r)
-        plain += bytes(ts_r)
-
+    def encrypt_and_hmac(self, packet):
         # Encrypt and hash
+        plain = bytes(packet)[const.IKE_HEADER.size:]
         iv = os.urandom(16)
-
         ikecrypto = Camellia(self.SK_ei, iv)
-
-        logger.debug('IV: {}'.format(binascii.hexlify(iv)))
-        logger.debug('IKE packet in plain: {}'.format(binascii.hexlify(plain)))
+        logger.debug('IV: {}'.format(dump(iv)))
+        logger.debug('IKE packet in plain: {}'.format(dump(plain)))
         # Encrypt
         ciphertext = ikecrypto.encrypt(plain)
         payload_len = PAYLOAD.size + len(iv) + len(ciphertext) + MACLEN
         enc_payload = PAYLOAD.pack(35, 0, payload_len) + iv + ciphertext
-
         # IKE Header
-        data = IKE_HEADER.pack(
+        data = const.IKE_HEADER.pack(
             self.iSPI,
             self.rSPI,
             46,  # first payload (encrypted)
@@ -160,16 +124,41 @@ class IKE(object):
             35,  # exchange_type (AUTH)
             const.IKE_HDR_FLAGS['I'],
             1,  # message_id
-            len(enc_payload) + IKE_HEADER.size + MACLEN
+            len(enc_payload) + const.IKE_HEADER.size + MACLEN
         ) + enc_payload
-
         logger.debug("Final data: {}".format(dump(data)))
         # Sign
         ikehash = HMAC(self.SK_ai, digestmod=sha256)
         ikehash.update(data)
         mac = ikehash.digest()[:MACLEN]
-        logger.debug("HMAC: {}".format(binascii.hexlify(mac)))
+        logger.debug("HMAC: {}".format(dump(mac)))
         return data + mac
+
+    def ike_auth(self, packet):
+
+        # Add IDi (35)
+        id_payload = payloads.IDi(next_payload='AUTH')
+        packet.add_payload(id_payload)
+
+        # Add AUTH (39)
+        signed_octets = bytes(self.packets[0]) + self.Nr + prf(self.SK_pi, id_payload._data)
+        packet.add_payload(payloads.AUTH(signed_octets))
+
+        # Add SA (33)
+        self.esp_SPIout = os.urandom(4)
+        packet.add_payload(payloads.SA(proposals=[
+            proposal.Proposal(protocol=const.ProtocolID.ESP, spi=self.esp_SPIout, last=True, transforms=[
+                ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)
+            ])
+        ]))
+
+        # Add TSi (44)
+        packet.add_payload(payloads.TSi(addr=self.address))
+
+        # Add TSr (45)
+        packet.add_payload(payloads.TSr(addr=self.peer))
+
+        return self.encrypt_and_hmac(packet)
 
 
 class Packet(object):
@@ -205,10 +194,6 @@ class Packet(object):
             (len(self.data) + const.IKE_HEADER.size)
         ))
         return bytes(self.header + self.data)
-
-
-class IkeError(Exception):
-    pass
 
 
 def parse_packet(data, ike=None):
