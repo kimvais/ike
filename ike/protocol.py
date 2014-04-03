@@ -135,35 +135,20 @@ class IKE(object):
 
     def encrypt_and_hmac(self, packet):
         final = Packet(exchange_type=packet.exchange_type, iSPI=packet.iSPI, rSPI=packet.rSPI, message_id=1)
-        # Encrypt and hash
-        plain = bytes(packet)[const.IKE_HEADER.size:]
+        # Set up crypto
         iv = os.urandom(16)
         ikecrypto = Camellia(self.SK_ei, iv)
+        ikehash = HMAC(self.SK_ai, digestmod=sha256)
         logger.debug('IV: {}'.format(dump(iv)))
-        logger.debug('IKE packet in plain: {}'.format(dump(plain)))
+
         # Encrypt
+        plain = bytes(packet)[const.IKE_HEADER.size:]
         ciphertext = ikecrypto.encrypt(plain)
-        payload_len = const.PAYLOAD_HEADER.size + len(iv) + len(ciphertext) + MACLEN
-        enc_payload = const.PAYLOAD_HEADER.pack(35, 0, payload_len) + iv + ciphertext
-        # IKE Header
-        data = const.IKE_HEADER.pack(
-            self.iSPI,
-            self.rSPI,
-            46,  # first payload (encrypted)
-            const.IKE_VERSION,
-            35,  # exchange_type (AUTH)
-            const.IKE_HDR_FLAGS['I'],
-            1,  # message_id
-            len(enc_payload) + const.IKE_HEADER.size + MACLEN
-        ) + enc_payload
-        logger.debug("Final data: {}".format(dump(data)))
-        # Sign
-        #logger.debug("HMAC: {}".format(dump(mac)))
         sk = payloads.SK(next_payload=packet.payloads[0]._type, iv=iv, ciphertext=ciphertext)
         final.add_payload(sk)
         logger.debug(dump(bytes(final)))
-        ikehash = HMAC(self.SK_ai, digestmod=sha256)
-        #ikehash.update(data)
+
+        # Sign
         ikehash.update(bytes(final)[:-MACLEN])
         mac = ikehash.digest()[:MACLEN]
         sk.mac(mac)
