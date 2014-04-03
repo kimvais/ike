@@ -17,7 +17,10 @@ Usage:
 
 
 class IKEInitiator(asyncio.DatagramProtocol):
-
+    """
+    Implements an IKE initiator that attempt to negotiate a single child SA
+    to remote peer.
+    """
     def connection_made(self, transport):
         from ike.protocol import IKE
         self.transport = transport

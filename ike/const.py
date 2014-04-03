@@ -8,7 +8,7 @@
 from enum import IntEnum
 
 import struct
-from util import dh
+from . util import dh
 
 __author__ = 'kimvais'
 

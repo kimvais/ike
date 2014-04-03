@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 class Type(IntEnum):
+    """
+    Payload types as defined in
+    https://www.iana.org/assignments/ikev2-parameters/ikev2-parameters.xhtml#ikev2-parameters-2
+    """
     no_next_payload = 0
     SA = 33
     KE = 34
@@ -41,15 +45,18 @@ class Type(IntEnum):
     TSi = 44
     TSr = 45
     SK = 46
+    CP = 47
+    EAP = 48
+    GSPM = 49
+    IDg = 50
+    GSA = 51
+    KD = 52
 
     def __repr__(self, *args, **kwargs):
         return '<{}: {}>'.format(self.name, self.value)
 
-    CP = 47
-    EAP = 48
 
-
-class IkePayload(object):
+class _IkePayload(object):
     _type = None
 
     def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False):
@@ -88,7 +95,7 @@ class IkePayload(object):
         self._data = data
 
 
-class SA(IkePayload):
+class SA(_IkePayload):
     def __init__(self, data=None, proposals=None, next_payload=Type.no_next_payload,
                  critical=False):
         super(SA, self).__init__(data, next_payload, critical)
@@ -130,7 +137,7 @@ class SA(IkePayload):
             data = data[proposal.len:]
 
 
-class KE(IkePayload):
+class KE(_IkePayload):
     def parse(self, data):
         self.group, _ = struct.unpack('!2H', data[4:8])
         self.kex_data = data[const.PAYLOAD_HEADER.size + 4:self.length]
@@ -148,7 +155,7 @@ class KE(IkePayload):
             self.length = const.PAYLOAD_HEADER.size + len(self._data)
 
 
-class Nonce(IkePayload):
+class Nonce(_IkePayload):
     def parse(self, data):
         self._data = data[const.PAYLOAD_HEADER.size:self.length]
 
@@ -165,7 +172,7 @@ class Nonce(IkePayload):
             self.length = const.PAYLOAD_HEADER.size + len(self._data)
 
 
-class Notify(IkePayload):
+class Notify(_IkePayload):
     def __init__(self, notify_type=None, data=None, next_payload=Type.no_next_payload, critical=False):
         # TODO; Implement generation of notifications with data
         assert notify_type or data
@@ -197,7 +204,7 @@ class Notify(IkePayload):
             return '<Notify payload {0!r} [{1}]>'.format(self.message_type, self.length)
 
 
-class _TS(IkePayload):
+class _TS(_IkePayload):
     """
     Single IPv4 address:port
     """
@@ -221,7 +228,7 @@ class TSr(_TS):
     pass
 
 
-class IDi(IkePayload):
+class IDi(_IkePayload):
     def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False):
         super().__init__(data, next_payload, critical)
         EMAIL = b'test@77.fi'
@@ -229,11 +236,11 @@ class IDi(IkePayload):
         self._data = struct.pack("!B3x", 3) + EMAIL  # ID Type (RFC822 address) + reserved
 
 
-class IDr(IkePayload):
+class IDr(_IkePayload):
     pass
 
 
-class AUTH(IkePayload):
+class AUTH(_IkePayload):
     def __init__(self, signed_octets=None, data=None, next_payload=Type.no_next_payload, critical=False):
         assert signed_octets or data
         super().__init__(data, next_payload, critical)
@@ -256,7 +263,7 @@ class AUTH(IkePayload):
             self._data = struct.pack("!B3x", authentication_type) + authentication_data
 
 
-class SK(IkePayload):
+class SK(_IkePayload):
     def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False, iv=None, ciphertext=None):
         assert data or (iv and ciphertext)
         super().__init__(data, next_payload, critical)
@@ -271,13 +278,14 @@ class SK(IkePayload):
 
 
 # Register payloads in order to be used for get_by_type()
-_payload_classes = IkePayload.__subclasses__() + _TS.__subclasses__()
+_payload_classes = _IkePayload.__subclasses__() + _TS.__subclasses__()
 _payload_map = {x.__name__: x for x in _payload_classes if not x.__name__.startswith('_')}
 
 
 def get_by_type(payload_type):
     """
     Returns an IkePayload (sub)class based on the RFC5996 payload_type
+    :param payload_type: int() Ike Payload type
     """
-    return _payload_map.get(Type(payload_type).name, IkePayload)
+    return _payload_map.get(Type(payload_type).name, _IkePayload)
 

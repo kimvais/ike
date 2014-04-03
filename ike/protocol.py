@@ -38,7 +38,19 @@ class IkeError(Exception):
 
 
 class IKE(object):
+    """
+    A single IKE negotiation / SA.
+
+    Currently implements only Initiator side of the negotiation.
+    """
     def __init__(self, address, peer, dh_group=14, nonce_len=32):
+        """
+
+        :param address: local address tuple(host, port)
+        :param peer: remote address tuple(host, port)
+        :param dh_group: diffie hellman group number
+        :param nonce_len: length of Nonce data
+        """
         self.iSPI = 0  # XXX: Should be generated here and passed downwards
         self.rSPI = 0
         self.diffie_hellman = DiffieHellman(dh_group)
@@ -49,6 +61,11 @@ class IKE(object):
         self.peer = peer
 
     def init_send(self):
+        """
+        Generates the first (IKE_INIT) packet for Initiator
+
+        :return: bytes() containing a valid IKE_INIT packet
+        """
         packet = Packet()
         self.packets.append(packet)
         packet.add_payload(payloads.SA())
@@ -59,6 +76,12 @@ class IKE(object):
         return bytes(packet)
 
     def auth_send(self):
+        """
+        Generates the second (IKE_AUTH) packet for Initiator
+
+        :return: bytes() containing a valid IKE_INIT packet
+        """
+        assert len(self.packets) == 2
         packet = Packet(exchange_type=const.ExchangeType.IKE_AUTH, iSPI=self.iSPI, rSPI=self.rSPI)
 
         # Add IDi (35)
@@ -92,14 +115,20 @@ class IKE(object):
         return self.encrypt_and_hmac(packet)
 
     def init_recv(self):
-        # find Nr
+        """
+        Parses the IKE_INIT response packet received from Responder.
+
+        Assigns the correct values of rSPI and Nr
+        Calculates Diffie-Hellman exchange and assigns all keys to self.
+
+        """
+        assert len(self.packets) == 2
         for p in self.packets[-1].payloads:
-            if p._type == 40:
+            if p._type == payloads.Type.Nr:
                 self.Nr = p._data
                 logger.debug(u"Responder nonce {}".format(binascii.hexlify(self.Nr)))
-            elif p._type == 34:
+            elif p._type == payloads.Type.KE:
                 int_from_bytes = int.from_bytes(p.kex_data, 'big')
-                #int_from_bytes = int(str(p.kex_data).encode('hex'), 16)
                 self.diffie_hellman.derivate(int_from_bytes)
             else:
                 logger.debug('Ignoring: {}'.format(p))
@@ -134,6 +163,12 @@ class IKE(object):
         pass
 
     def encrypt_and_hmac(self, packet):
+        """
+        Encrypts and signs a Packet() using self.SK_ei and self.SK_ai
+
+        :param packet: Unecrypted Packet() with one or more payloads.
+        :return: Encrypted and signed Packet() with a single payloads.SK
+        """
         final = Packet(exchange_type=packet.exchange_type, iSPI=packet.iSPI, rSPI=packet.rSPI, message_id=1)
         # Set up crypto
         iv = os.urandom(16)
@@ -157,6 +192,13 @@ class IKE(object):
         return bytes(final)
 
     def decrypt(self, data):
+        """
+        Decrypts an encrypted (SK, 46) IKE payload using self.SK_er
+
+        :param data: Encrypted IKE payload including headers (payloads.SK())
+        :return: next_payload, data_containing_payloads
+        :raise IkeError: If packet is corrupted.
+        """
         next_payload, is_critical, payload_len = const.PAYLOAD_HEADER.unpack(data[:const.PAYLOAD_HEADER.size])
         next_payload = payloads.Type(next_payload)
         logger.debug("next payload: {!r}".format(next_payload))
@@ -175,6 +217,12 @@ class IKE(object):
         return next_payload, decrypted
 
     def verify_hmac(self, data):
+        """
+        Verifies the HMAC signature of an encrypted (SK, 46) payload using self.SK_ar
+
+        :param data: bytes(payloads.SK())
+        :raise IkeError: if calculated signature does not match the one in the payload
+        """
         hmac = HMAC(self.SK_ar, digestmod=sha256)
         hmac_theirs = data[-MACLEN:]
         hmac.update(data[:-MACLEN])
@@ -185,6 +233,14 @@ class IKE(object):
             raise IkeError('HMAC verify failed')
 
     def parse_packet(self, data):
+        """
+        Parses a received packet in to Packet() with corresponding payloads.
+        Will decrypt encrypted packets when needed.
+
+        :param data: bytes() IKE packet from wire.
+        :return: Packet() instance
+        :raise IkeError: on malformed packet
+        """
         packet = Packet()
         packet.header = data[0:const.IKE_HEADER.size]
         (packet.iSPI, packet.rSPI, next_payload, packet.version, exchange_type, packet.flags,
@@ -210,7 +266,7 @@ class IKE(object):
                 payload = payloads.get_by_type(next_payload)(data=data)
             except KeyError as e:
                 logger.error("Unidentified payload {}".format(e))
-                payload = payloads.IkePayload(data=data)
+                payload = payloads._IkePayload(data=data)
             packet.payloads.append(payload)
             logger.debug('Payloads: {0!r}'.format(packet.payloads))
             next_payload = payload.next_payload
@@ -221,18 +277,22 @@ class IKE(object):
 
 
 class Packet(object):
-    def __init__(self, data=None, exchange_type=None, message_id=0, iSPI=0, rSPI=0):
+    """
+    An IKE packet.
+
+    To generate packets:
+    1. instantiate an Packet()
+    2. add payloads by Packet.add_payload(<payloads.IkePayload instance>)
+    3. send bytes(Packet) to other peer.
+
+    Received packets should be generated by IKE.parse_packet().
+    """
+    def __init__(self, exchange_type=None, message_id=0, iSPI=0, rSPI=0):
         if exchange_type is None:
             exchange_type=const.ExchangeType.IKE_SA_INIT
         self.payloads = list()
-        if data:
-            self.data = data
-        else:
-            self.data = b''
         self.iSPI = iSPI
         self.rSPI = rSPI
-        self.length = 0
-        self.header = b''
         self.message_id = message_id
         self.exchange_type = exchange_type
 
@@ -245,9 +305,9 @@ class Packet(object):
         self.payloads.append(payload)
 
     def __bytes__(self):
-        self.data = reduce(operator.add, (bytes(x) for x in self.payloads))
-        length = len(self.data) + const.IKE_HEADER.size
-        self.header = bytearray(const.IKE_HEADER.pack(
+        data = reduce(operator.add, (bytes(x) for x in self.payloads))
+        length = len(data) + const.IKE_HEADER.size
+        header = bytearray(const.IKE_HEADER.pack(
             self.iSPI,
             self.rSPI,
             self.payloads[0]._type,
@@ -257,7 +317,7 @@ class Packet(object):
             self.message_id,
             length
         ))
-        return bytes(self.header + self.data)
+        return bytes(header + data)
 
 
 
