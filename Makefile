@@ -1,4 +1,6 @@
-all: clean doc pypi
+all: clean doc
+
+release: pypi
 
 clean-doc:
 	rm docs/ike.rst docs/ike.util.rst docs/modules.rst || true

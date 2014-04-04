@@ -40,7 +40,6 @@ class IKEInitiator(asyncio.DatagramProtocol):
         logger.info("Received %r from %s:%d" % (data, host, port))
         packet = self.ike.parse_packet(data=data)
         logger.info('{} message {}'.format(packet.exchange_type.name, packet.message_id))
-        # TODO: Check that SPIs match
         if self.ike.state == State.INIT and packet.exchange_type == ExchangeType.IKE_SA_INIT:
             self.ike.init_recv()
             ike_auth = self.ike.auth_send()
