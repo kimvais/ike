@@ -153,3 +153,5 @@ class AuthenticationType(IntEnum):
     RSA = 1
     PSK = 2
     DSS = 3
+
+AUTH_HEADER = "!B3x"

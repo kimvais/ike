@@ -20,6 +20,7 @@ from ike.util.prf import prf
 from .proposal import Proposal
 from .util.conv import to_bytes
 
+
 PRIVATE_KEY_PEM = 'tests/private_key.pem'
 
 __author__ = 'kimvais'
@@ -293,7 +294,7 @@ class AUTH(_IkePayload):
                 authentication_data = b''
                 raise AssertionError("Unsupported authentication method")
             self.length = 8 + len(authentication_data)
-            self._data = struct.pack("!B3x", authentication_type) + authentication_data
+            self._data = struct.pack(const.AUTH_HEADER, authentication_type) + authentication_data
 
 
 class SK(_IkePayload):

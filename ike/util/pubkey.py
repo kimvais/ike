@@ -5,6 +5,9 @@
 
 import rsa
 
+VerifyError = rsa.VerificationError
+
+
 def sign(data, filename, hash_alg="SHA-256"):
     assert isinstance(data, bytes)
     with open(filename, 'rb') as keyfile:
@@ -15,4 +18,7 @@ def sign(data, filename, hash_alg="SHA-256"):
 def verify(data, signature, filename):
     with open(filename, 'rb') as publicfile:
         public_key = rsa.PublicKey.load_pkcs1(publicfile.read())
-    return rsa.verify(data, signature, public_key)
+    try:
+        return rsa.verify(data, signature, public_key)
+    except rsa.VerificationError:
+        raise

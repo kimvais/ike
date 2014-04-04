@@ -7,7 +7,7 @@ def readme():
         return f.read()
 
 setup(name='ike',
-      version='0.0.3',
+      version='0.0.4',
       description='Minimalistic Internet Key Exchange protocol v2 (RFC 5996) library',
       long_description=readme(),
       author='Kimmo Parviainen-Jalanko',
