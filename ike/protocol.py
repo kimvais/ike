@@ -129,7 +129,8 @@ class IKE(object):
 
         """
         assert len(self.packets) == 2
-        for p in self.packets[-1].payloads:
+        packet = self.packets[-1]
+        for p in packet.payloads:
             if p._type == payloads.Type.Nr:
                 self.Nr = p._data
                 logger.debug(u"Responder nonce {}".format(binascii.hexlify(self.Nr)))
@@ -280,10 +281,12 @@ class IKE(object):
          packet.message_id, packet.length) = const.IKE_HEADER.unpack(packet.header)
         packet.exchange_type = const.ExchangeType(exchange_type)
         if self.iSPI != packet.iSPI:
-            raise IkeError("Packet to an unknown IKE SA")
+            raise IkeError("Initiator SPI mismatch, packet to an unknown IKE SA")
         elif not self.rSPI:
             logger.debug("Setting responder SPI: {0:x}".format(packet.rSPI))
             self.rSPI = packet.rSPI
+        elif self.rSPI != packet.rSPI:
+            raise IkeError("Responder SPI mismatch, packet to an unknown IKE SA")
         if packet.message_id - int(self.state) != 1:
             logger.debug("message ID {} at state {!r}".format(packet.message_id, self.state))
         logger.debug("next payload: {!r}".format(next_payload))
