@@ -12,6 +12,6 @@ setup(name='ike',
       long_description=readme(),
       author='Kimmo Parviainen-Jalanko',
       author_email='k@77.fi',
-      url='http://github.com/kimvais/pyike/',
+      url='http://github.com/kimvais/ike/',
       packages=['ike']
      )
