@@ -70,7 +70,7 @@ class _IkePayload(object):
             next_payload, self.flags, self.length = const.PAYLOAD_HEADER.unpack(
                 data[:const.PAYLOAD_HEADER.size])
             self.next_payload = Type(next_payload)
-            self.parse(data[const.PAYLOAD_HEADER.size:])
+            self.parse(data[const.PAYLOAD_HEADER.size:self.length])
         else:
             self.next_payload = next_payload
             self.length = 0
