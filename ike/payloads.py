@@ -2,6 +2,9 @@
 #
 # Copyright © 2013-2014 Kimmo Parviainen-Jalanko.
 #
+"""
+IKEv2 Payloads as specified in RFC 5996 sections 3.2 - 3.16
+"""
 from enum import IntEnum
 from functools import reduce
 import ipaddress
@@ -26,8 +29,7 @@ logger = logging.getLogger(__name__)
 
 class Type(IntEnum):
     """
-    Payload types as defined in
-    https://www.iana.org/assignments/ikev2-parameters/ikev2-parameters.xhtml#ikev2-parameters-2
+    Payload types from `IANA <https://www.iana.org/assignments/ikev2-parameters/ikev2-parameters.xhtml#ikev2-parameters-2>`_
     """
     no_next_payload = 0
     SA = 33
@@ -57,6 +59,9 @@ class Type(IntEnum):
 
 
 class _IkePayload(object):
+    """
+    Generic payload header `RFC5996 Section 3.2 <https://tools.ietf.org/html/rfc5996#section-3.2>`_
+    """
     _type = None
 
     def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False):
@@ -96,6 +101,9 @@ class _IkePayload(object):
 
 
 class SA(_IkePayload):
+    """
+    `Security Association Payload <https://tools.ietf.org/html/rfc5996#section-3.3>`_
+    """
     def __init__(self, data=None, proposals=None, next_payload=Type.no_next_payload,
                  critical=False):
         super(SA, self).__init__(data, next_payload, critical)
@@ -138,6 +146,9 @@ class SA(_IkePayload):
 
 
 class KE(_IkePayload):
+    """
+    `Key Exchange Payload <https://tools.ietf.org/html/rfc5996#section-3.4>`_
+    """
     def parse(self, data):
         self.group, _ = struct.unpack('!2H', data[4:8])
         self.kex_data = data[const.PAYLOAD_HEADER.size + 4:self.length]
@@ -156,6 +167,9 @@ class KE(_IkePayload):
 
 
 class Nonce(_IkePayload):
+    """
+    `Nonce Payload <https://tools.ietf.org/html/rfc5996#section-3.9>`_
+    """
     def parse(self, data):
         self._data = data[const.PAYLOAD_HEADER.size:self.length]
 
@@ -173,6 +187,9 @@ class Nonce(_IkePayload):
 
 
 class Notify(_IkePayload):
+    """
+    `Notify Payload <https://tools.ietf.org/html/rfc5996#section-3.10>`_
+    """
     def __init__(self, notify_type=None, data=None, next_payload=Type.no_next_payload, critical=False):
         # TODO; Implement generation of notifications with data
         assert notify_type or data
@@ -206,6 +223,7 @@ class Notify(_IkePayload):
 
 class _TS(_IkePayload):
     """
+    `Traffic Selector Payload <https://tools.ietf.org/html/rfc5996#section-3.13>`_
     Single IPv4 address:port
     """
     def __init__(self, addr=None, data=None, next_payload=Type.no_next_payload, critical=False):
@@ -221,14 +239,23 @@ class _TS(_IkePayload):
             self.length = len(self._data) + 4
 
 class TSi(_TS):
+    """
+    `Traffic Selector Payload <https://tools.ietf.org/html/rfc5996#section-3.13>`_ for initiator
+    """
     pass
 
 
 class TSr(_TS):
+    """
+    `Traffic Selector Payload <https://tools.ietf.org/html/rfc5996#section-3.13>`_ for responder
+    """
     pass
 
 
 class IDi(_IkePayload):
+    """
+    `Identification Payload <https://tools.ietf.org/html/rfc5996#section-3.5>`_ for initiator
+    """
     def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False):
         super().__init__(data, next_payload, critical)
         EMAIL = b'test@77.fi'
@@ -237,10 +264,16 @@ class IDi(_IkePayload):
 
 
 class IDr(_IkePayload):
+    """
+    `Identification Payload <https://tools.ietf.org/html/rfc5996#section-3.5>`_ for responder
+    """
     pass
 
 
 class AUTH(_IkePayload):
+    """
+    `Authentication Payload <https://tools.ietf.org/html/rfc5996#section-3.8>`_
+    """
     def __init__(self, signed_octets=None, data=None, next_payload=Type.no_next_payload, critical=False):
         assert signed_octets or data
         super().__init__(data, next_payload, critical)
@@ -264,6 +297,9 @@ class AUTH(_IkePayload):
 
 
 class SK(_IkePayload):
+    """
+    `Encrypted Payload <https://tools.ietf.org/html/rfc5996#section-3.14>`_
+    """
     def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False, iv=None, ciphertext=None):
         assert data or (iv and ciphertext)
         super().__init__(data, next_payload, critical)

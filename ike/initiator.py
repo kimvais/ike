@@ -6,6 +6,7 @@
 
 import logging
 import asyncio
+import os
 import docopt
 
 __doc__ = """
@@ -13,7 +14,7 @@ IKE v2 (RFC 5996) initiator implementation
 
 Usage:
     {} <remote_peer>
-""".format(__file__)
+""".format(os.path.split(__file__)[-1])
 
 
 class IKEInitiator(asyncio.DatagramProtocol):

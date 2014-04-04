@@ -2,6 +2,11 @@
 #
 # Copyright © 2013-2014 Kimmo Parviainen-Jalanko.
 #
+"""
+Implements Proposal and Transform substructures for Security association (SA) payloads.
+
+Conforms to `RFC5996 section 3.3 <https://tools.ietf.org/html/rfc5996#section-3.3>`_
+"""
 from functools import reduce
 import logging
 import os
@@ -10,7 +15,6 @@ import struct
 import binascii
 
 from . import const
-
 
 __author__ = 'kimvais'
 

@@ -13,9 +13,11 @@ Contents:
 
    readme
    ike
+   modules
 
 .. automodule:: ike
    :members:
+   
 
 
 Indices and tables
