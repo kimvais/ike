@@ -190,11 +190,48 @@ class IKE(object):
                 logger.debug('Got responder ID: {}'.format(dump(bytes(p))))
             if p._type == payloads.Type.AUTH:
                 auth_data = p._data
+            if p._type == payloads.Type.SA:
+                logger.debug('ESP_SPIin: {}'.format(p.spi))
+                self.esp_SPIin = p.spi
+                for proposal in p.proposals:
+                    logger.debug("Proposal: {}".format(proposal.__dict__))
+                    logger.debug(proposal.spi)
         if id_r is None or auth_data is None:
             raise IkeError('IDr missing from IKE_AUTH response')
         message2 = bytes(self.packets[1])
         authenticated = self.authenticate_peer(auth_data, id_r, message2)
         assert authenticated
+        keymat = prfplus(self.SK_d, self.Ni + self.Nr, 4 * 32)
+        (self.esp_ei,
+          self.esp_ai,
+          self.esp_er,
+          self.esp_ar,
+         ) = unpack("32s" * 4, keymat)
+        # TODO: Figure out the names for the params, they _ARE_ in correct places, just the names migth mismatch.
+        logger.debug("ESP Ai: {}".format(dump(self.esp_ai)))
+        logger.debug("ESP Ar: {}".format(dump(self.esp_ar)))
+        logger.debug("ESP Ei: {}".format(dump(self.esp_ei)))
+        logger.debug("ESP Er: {}".format(dump(self.esp_er)))
+        inbound_params = dict(spi=self.esp_SPIin,
+                               key_e=binascii.hexlify(self.esp_ei).decode('ascii'),
+                               key_a=binascii.hexlify(self.esp_ai).decode('ascii'),
+                               ip_from=self.address[0],
+                               ip_to=self.peer[0])
+        outbound_params = dict(spi=int.from_bytes(self.esp_SPIout, 'big'),
+                              key_e=binascii.hexlify(self.esp_er).decode('ascii'),
+                              key_a=binascii.hexlify(self.esp_ar).decode('ascii'),
+                              ip_to=self.address[0],
+                              ip_from=self.peer[0])
+        setkey_in = 'add {ip_from} {ip_to} esp {spi} -m tunnel -E camellia-cbc 0x{key_e} -A hmac-sha256 0x{key_a}'.format(
+            **inbound_params)
+        setkey_out = 'add {ip_from} {ip_to} esp {spi} -m tunnel -E camellia-cbc 0x{key_e} -A hmac-sha256 0x{key_a}'.format(
+            **outbound_params)
+        spdadd = """
+spdadd {myip}[any] {peerip}[any] any -P out ipsec esp/tunnel/{myip}-{peerip}/use;
+spdadd {peerip}[any] {myip}[any] any -P in ipsec esp/tunnel/{peerip}-{myip}/use;
+""".format(myip=self.address[0], peerip=self.peer[0])
+        logger.info("Please install the SAs via 'setkey -f'\nflush;\nspdflush:\n{0};\n{1};\n{2}\ndump esp;".format(
+            setkey_out, setkey_in, spdadd))
 
     def encrypt_and_hmac(self, packet):
         """

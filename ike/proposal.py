@@ -19,7 +19,6 @@ from . import const
 __author__ = 'kimvais'
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 class Proposal(object):

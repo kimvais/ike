@@ -124,9 +124,10 @@ class SA(_IkePayload):
                     ('AUTH_HMAC_SHA2_256_128',)
                 ])
             ]
+            self.spi = self.proposals[0].spi
         else:
             self.proposals = proposals
-        self.spi = self.proposals[0].spi
+            self.spi = self.proposals[0].spi
 
     def __bytes__(self):
         ret = list()
@@ -141,9 +142,13 @@ class SA(_IkePayload):
         last = False
         while not last:
             proposal = Proposal(data=data)
+            if proposal.spi:
+                logger.debug("Setting SPI to: {}".format(proposal.spi))
+                self.spi = proposal.spi
             self.proposals.append(proposal)
             last = proposal.last
             data = data[proposal.len:]
+        logger.debug("got {} proposals".format(len(self.proposals)))
 
 
 class KE(_IkePayload):
@@ -233,6 +238,7 @@ class _TS(_IkePayload):
         if addr:
             ip = int(ipaddress.IPv4Address(addr[0]))
             port = addr[1]
+            port = 0
 
             # Generate traffic selector
             selector = struct.pack("!2BH2H2I", 7, 0, 16, port, port, ip, ip)
