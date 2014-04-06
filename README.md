@@ -4,8 +4,9 @@ About ike
 The goal of this project is to be a minimalistic IKEv2 (RFC 5996) implementation in Python.
 
 ## Status
-This project is in *very, very* early stages. The code is somewhat hideous mess of spaghetti and does not
-adhere to any standards required of a security software. Use at own risk. Or preferably, don't use at all yet.
+This project is in *very* early stages. Use at own risk.
+
+It is _almost_ possible to install ESP SAs negotiated using this library manually using 'setkey -f'.
 
 ## Design principles
 - Minimal amount of code.

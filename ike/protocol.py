@@ -230,7 +230,7 @@ class IKE(object):
 spdadd {myip}[any] {peerip}[any] any -P out ipsec esp/tunnel/{myip}-{peerip}/use;
 spdadd {peerip}[any] {myip}[any] any -P in ipsec esp/tunnel/{peerip}-{myip}/use;
 """.format(myip=self.address[0], peerip=self.peer[0])
-        logger.info("Please install the SAs via 'setkey -f'\nflush;\nspdflush:\n{0};\n{1};\n{2}\ndump esp;".format(
+        logger.info("Please install the SAs via 'setkey -f'\nflush;\nspdflush;\n{0};\n{1};\n{2}\ndump esp;".format(
             setkey_out, setkey_in, spdadd))
 
     def encrypt_and_hmac(self, packet):
