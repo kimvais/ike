@@ -36,6 +36,14 @@ ike.util.dump module
     :undoc-members:
     :show-inheritance:
 
+ike.util.external module
+------------------------
+
+.. automodule:: ike.util.external
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ike.util.prf module
 -------------------
 

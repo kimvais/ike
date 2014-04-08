@@ -7,10 +7,26 @@ implementation in Python.
 Status
 ------
 
-This project is in *very* early stages. Use at own risk.
+This project is in early stages. Use at own risk.
 
-It is *almost* possible to install ESP SAs negotiated using this library
-manually using 'setkey -f'.
+It will make your IP stack talk ESP to the remote peer.
+
+What it can do:
+
+-  Act as an initiator
+-  Authenticate itself and peer using raw RSA keys.
+-  Install ESP SAs and SPD entries to use the key material via
+   ``setkey`` command from ipsec-tools.
+
+Limitations (hardcoded values):
+
+-  Cipher algorithm is Camellia in CBC mode with 256 bit keys.
+-  HMAC / Hash / PRF algorithm is SHA2/256.
+-  IKE group is Diffie-Hellman modp 14.
+-  Authentication (both own private and peer public) key file paths are
+   hardcoded.
+-  'setkey' syntax is of whatever the ipsec-tools on Debian 7.1 accept.
+-  Traffic selectors are myip:any:0-65535 <-> peerip:any:0-65535
 
 Design principles
 -----------------

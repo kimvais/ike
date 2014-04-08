@@ -18,7 +18,7 @@ setup(name='ike',
       download_url='https://github.com/kimvais/ike/releases',
       packages=['ike'],
       classifiers=[
-          'Development Status :: 2 - Pre-Alpha',
+          'Development Status :: 3 - Alpha',
           'License :: OSI Approved :: MIT License',
           'Operating System :: Unix',
           'Programming Language :: Python :: 3.4',

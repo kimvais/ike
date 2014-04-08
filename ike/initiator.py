@@ -14,6 +14,11 @@ IKE v2 (RFC 5996) initiator implementation
 
 Usage:
     {} <remote_peer>
+
+To clean up afterwards, ::
+
+    setkey -FP && setkey -F
+
 """.format(os.path.split(__file__)[-1])
 
 
