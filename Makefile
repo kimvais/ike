@@ -11,9 +11,10 @@ doc: clean-doc
 	sphinx-apidoc -o docs/ ike
 	sphinx-build docs docs/_build
 	git add docs/*.rst
+	cd docs/_build && zip -r ../../docs.zip .
 
 clean: clean-doc
-	rm -rf __pycache__ build dist README.rst || true
+	rm -rf __pycache__ build dist README.rst *.zip || true
 
 pypi:
 	python setup.py sdist bdist upload

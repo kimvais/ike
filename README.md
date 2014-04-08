@@ -31,7 +31,7 @@ Limitations (hardcoded values):
 - Use strongest algorithms possible.
 
 ## Documentation
-You can read the Documentation at https://ike.readthedocs.org
+You can read the Documentation at https://pythonhosted.org/ike
 
 ### What this project is *NOT* going to be
 
