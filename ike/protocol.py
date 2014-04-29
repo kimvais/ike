@@ -191,12 +191,12 @@ class IKE(object):
         logger.debug("ESP Ar: {}".format(dump(self.esp_ar)))
         logger.debug("ESP Ei: {}".format(dump(self.esp_ei)))
         logger.debug("ESP Er: {}".format(dump(self.esp_er)))
-        inbound_params = dict(spi=self.esp_SPIin,
+        outbound_params = dict(spi=self.esp_SPIout,
                               key_e=binascii.hexlify(self.esp_ei).decode('ascii'),
                               key_a=binascii.hexlify(self.esp_ai).decode('ascii'),
                               ip_from=self.address[0],
                               ip_to=self.peer[0])
-        outbound_params = dict(spi=int.from_bytes(self.esp_SPIout, 'big'),
+        inbound_params = dict(spi=int.from_bytes(self.esp_SPIin, 'big'),
                                key_e=binascii.hexlify(self.esp_er).decode('ascii'),
                                key_a=binascii.hexlify(self.esp_ar).decode('ascii'),
                                ip_to=self.address[0],
