@@ -106,7 +106,7 @@ class IKE(object):
         packet.add_payload(payloads.AUTH(signed_octets))
 
         # Add SA (33)
-        self.esp_SPIout = os.urandom(4)
+        self.esp_SPIout = int.from_bytes(os.urandom(4), 'big')
         packet.add_payload(payloads.SA(proposals=[
             proposal.Proposal(protocol=const.ProtocolID.ESP, spi=self.esp_SPIout, last=True, transforms=[
                 ('ENCR_CAMELLIA_CBC', 256), ('ESN',), ('AUTH_HMAC_SHA2_256_128',)
@@ -196,7 +196,7 @@ class IKE(object):
                               key_a=binascii.hexlify(self.esp_ai).decode('ascii'),
                               ip_from=self.address[0],
                               ip_to=self.peer[0])
-        inbound_params = dict(spi=int.from_bytes(self.esp_SPIin, 'big'),
+        inbound_params = dict(spi=self.esp_SPIin,
                                key_e=binascii.hexlify(self.esp_er).decode('ascii'),
                                key_a=binascii.hexlify(self.esp_ar).decode('ascii'),
                                ip_to=self.address[0],

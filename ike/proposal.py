@@ -15,6 +15,7 @@ import struct
 import binascii
 
 from . import const
+from ike.util.conv import to_bytes
 
 __author__ = 'kimvais'
 
@@ -36,8 +37,9 @@ class Proposal(object):
             self.num = num
             self.protocol_id = protocol
             if spi is not None:
-                spi_str = spi
-                self.spi_len = len(spi)
+                assert isinstance(spi, int)
+                spi_str = to_bytes(spi)
+                self.spi_len = len(spi_str)
             else:
                 self.spi_len = spi_len
             if not self.spi_len:
@@ -45,11 +47,8 @@ class Proposal(object):
                     self.spi_len = 8
                 elif protocol in (const.ProtocolID.ESP, const.ProtocolID.AH):
                     self.spi_len = 4
-                spi_str = os.urandom(self.spi_len)
-            if self.spi_len == 8:
-                self.spi = struct.unpack('!Q', spi_str)[0]
-            elif self.spi_len == 4:
-                self.spi = struct.unpack('!L', spi_str)[0]
+                spi = int.from_bytes(os.urandom(self.spi_len), 'big')
+            self.spi = spi
 
     @property
     def data(self):
