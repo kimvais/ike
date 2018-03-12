@@ -45,6 +45,7 @@ class Type(IntEnum):
     Nr = 40
     Notify = 41
     Delete = 42
+    Vendor = 43
     TSi = 44
     TSr = 45
     SK = 46
@@ -54,6 +55,7 @@ class Type(IntEnum):
     IDg = 50
     GSA = 51
     KD = 52
+    Fragment = 132
 
     def __repr__(self, *args, **kwargs):
         return '<{}: {}>'.format(self.name, self.value)
@@ -192,6 +194,26 @@ class Nonce(_IkePayload):
             self.length = const.PAYLOAD_HEADER.size + len(self._data)
 
 
+class Vendor(_IkePayload):
+    """
+    `Nonce Payload <https://tools.ietf.org/html/rfc5996#section-3.12>`_
+    """
+    def parse(self, data):
+        self._data = data[const.PAYLOAD_HEADER.size:self.length]
+
+    def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False,
+                 vendor=None):
+        super(Vendor, self).__init__(data, next_payload, critical)
+        if data is not None:
+            self.parse(data)
+        else:
+            if vendor:
+                self._data = vendor
+            else:
+                self._data = os.urandom(32)
+            self.length = const.PAYLOAD_HEADER.size + len(self._data)
+
+
 class Notify(_IkePayload):
     """
     `Notify Payload <https://tools.ietf.org/html/rfc5996#section-3.10>`_
@@ -225,6 +247,24 @@ class Notify(_IkePayload):
                 self.spi_size, self.length)
         else:
             return '<Notify payload {0!r} [{1}]>'.format(self.message_type, self.length)
+
+
+class Fragment(_IkePayload):
+    """
+    `Fragment Payload`
+    """
+    def parse(self, data):
+        self._data = data[const.PAYLOAD_HEADER.size:self.length]
+
+    def __init__(self, data=None, next_payload=Type.no_next_payload, critical=False,
+                 fragment=None):
+        super(Fragment, self).__init__(data, next_payload, critical)
+        if data is not None:
+            self.parse(data)
+        else:
+            if fragment:
+                self._data = fragment
+                self.length = const.PAYLOAD_HEADER.size + len(self._data)
 
 
 class _TS(_IkePayload):

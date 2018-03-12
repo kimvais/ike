@@ -4,7 +4,7 @@ from setuptools import setup
 from ike import __version__
 
 def readme():
-    with open("README.rst") as f:
+    with open('docs/readme.rst') as f:
         return f.read()
 
 
@@ -16,7 +16,11 @@ setup(name='ike',
       author_email='k@77.fi',
       url='http://github.com/kimvais/ike/',
       download_url='https://github.com/kimvais/ike/releases',
-      packages=['ike'],
+      packages=['ike', 'ike.util'],
+      install_requires=[
+          'rsa',
+          'cryptography'
+      ],
       classifiers=[
           'Development Status :: 3 - Alpha',
           'License :: OSI Approved :: MIT License',
